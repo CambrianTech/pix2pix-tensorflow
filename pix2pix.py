@@ -12,6 +12,7 @@ import random
 import collections
 import math
 import time
+import io
 from scipy import misc
 
 parser = argparse.ArgumentParser()
@@ -562,16 +563,15 @@ def pixelPerfect(fetches):
         name, _ = os.path.splitext(os.path.basename(in_path.decode("utf8")))
         fileset = {"name": name, "step": None}
 
+        images = {}
         for kind in ["inputs", "outputs", "targets"]:
-            filename = name + "-" + kind + ".png"
-            fileset[kind] = filename
-            out_path = os.path.join(image_dir, filename)
             contents = fetches[kind][i]
-            with open(out_path, "wb") as f:
+            with io.BytesIO(kind) as f:
                 f.write(contents)
+                images[kind] = misc.imread(f)
 
-        a_image = misc.imread(os.path.join(image_dir, name + "-" + "outputs" + ".png"))
-        b_image = misc.imread(os.path.join(image_dir, name + "-" + "targets" + ".png"))
+        a_image = images["outputs"]
+        b_image = images["targets"]
 
         ha,wa = a_image.shape[:2]
         
@@ -582,8 +582,10 @@ def pixelPerfect(fetches):
         combined_img[:ha,wa:total_width]=b_image
 
         print(name)
-        combined_img_path = os.path.join(image_dir, name + "-ab.png")
+        combined_img_path = os.path.join(image_dir, name + ".png")
         misc.imsave(combined_img_path, combined_img)
+
+        return filesets
 
     return filesets
 
