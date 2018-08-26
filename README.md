@@ -239,6 +239,34 @@ Comparison on facades dataset:
 | <img src="docs/51-inputs.png" width="256px"> | <img src="docs/51-tensorflow.png" width="256px"> | <img src="docs/51-torch.jpg" width="256px"> | <img src="docs/51-targets.png" width="256px"> |
 | <img src="docs/95-inputs.png" width="256px"> | <img src="docs/95-tensorflow.png" width="256px"> | <img src="docs/95-torch.jpg" width="256px"> | <img src="docs/95-targets.png" width="256px"> |
 
+## Converting data to A/B Format
+
+Fortunately there's a utility to convert images to the A/B horizontally stacked format that this expects
+
+For instance, to convert the CamVid dataset in three steps.
+
+#### Training:
+```
+python ab_converter.py \
+  --a_input_dir=CamVid/train \
+  --b_input_dir=CamVid/train_labels \
+  --output_dir=CamVidAB/train
+```
+#### Test:
+```
+python ab_converter.py \
+  --a_input_dir=CamVid/test \
+  --b_input_dir=CamVid/test_labels \
+  --output_dir=CamVidAB/test
+```
+#### Validation:
+```
+python ab_converter.py \
+  --a_input_dir=CamVid/val \
+  --b_input_dir=CamVid/val_labels \
+  --output_dir=CamVidAB/val
+```
+
 ## Unimplemented Features
 
 The following models have not been implemented:
