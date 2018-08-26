@@ -245,21 +245,21 @@ Fortunately there's a utility to convert images to the A/B horizontally stacked 
 
 For instance, to convert the CamVid dataset in three steps.
 
-###Training:
+#### Training:
 ```
 python ab_converter.py \
   --a_input_dir=CamVid/train \
   --b_input_dir=CamVid/train_labels \
   --output_dir=CamVidAB/train
 ```
-###Test:
+#### Test:
 ```
 python ab_converter.py \
   --a_input_dir=CamVid/test \
   --b_input_dir=CamVid/test_labels \
   --output_dir=CamVidAB/test
 ```
-###Validation:
+#### Validation:
 ```
 python ab_converter.py \
   --a_input_dir=CamVid/val \
