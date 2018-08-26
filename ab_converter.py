@@ -13,12 +13,13 @@ import collections
 import math
 import time
 from PIL import Image
+from scipy import misc
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--a_input_dir", required=True, help="Source Input, image A, usually rgb camera data")
 parser.add_argument("--b_input_dir", required=True, help="Target Input, image B, usually labels")
 parser.add_argument("--output_dir", required=True, help="where to put output files")
-parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
+#parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
 a = parser.parse_args()
 
 def is_valid_image(path):
@@ -57,6 +58,28 @@ def main():
     for i in range(0, num_a):
         a_name = a_names[i]
         b_name = b_names[i]
+
+        a_image = misc.imread(a_name)
+        b_image = misc.imread(b_name)
+
+        ha,wa = a_image.shape[:2]
+        hb,wb = b_image.shape[:2]
+
+        if (ha != hb or wa != wb):
+            print("A and B images must match but do not for ", a_name, b_name)
+            return
+
+        total_width = 2 * wa
+        combined_img = np.zeros(shape=(ha, total_width, 3))
+
+        combined_img[:ha,:wa]=a_image
+        combined_img[:ha,wa:total_width]=b_image
+
+        combined_img_name = os.path.basename(a_name)
+        combined_img_path = os.path.join(a.output_dir, combined_img_name)
+        
+        misc.imsave(combined_img_path, combined_img)
+
         print (a_name, b_name)
 
 main()
