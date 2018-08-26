@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--a_input_dir", required=True, help="Source Input, image A, usually rgb camera data")
 parser.add_argument("--b_input_dir", required=True, help="Target Input, image B, usually labels")
 parser.add_argument("--output_dir", required=True, help="where to put output files")
-#parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
+
 a = parser.parse_args()
 
 def is_valid_image(path):

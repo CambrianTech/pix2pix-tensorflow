@@ -15,7 +15,7 @@ import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_dir", help="path to folder containing images")
-parser.add_argument("--mode", required=True, choices=["train", "test", "export"])
+parser.add_argument("--mode", required=True, choices=["train", "test", "export", "pixelPerfect"])
 parser.add_argument("--output_dir", required=True, help="where to put output files")
 parser.add_argument("--seed", type=int)
 parser.add_argument("--checkpoint", default=None, help="directory with checkpoint to resume training from or use for testing")
@@ -532,6 +532,55 @@ def append_index(filesets, step=False):
         index.write("</tr>")
     return index_path
 
+# python pix2pix.py \
+# --mode pixelPerfect \
+# --input_dir ~/datasets/CamVidAB/train \
+# --output_dir CamVidAB_pixelPerfect \
+# --which_direction AtoB \
+# --checkpoint=CamVidAB_train
+
+def pixelPerfect(fetches):
+# 1) run training images in test mode:
+# python pix2pix.py 
+# --mode test 
+# --output_dir CamVidAB_test 
+# --max_epochs 200 
+# --input_dir ~/datasets/CamVidAB/train 
+# --which_direction AtoB 
+# --checkpoint=CamVidAB_train
+#
+# 2) Build A/B image from target and output
+# 3) retrain!
+    
+    image_dir = os.path.join(a.output_dir, "images")
+    if not os.path.exists(image_dir):
+        os.makedirs(image_dir)
+
+    filesets = []
+    for i, in_path in enumerate(fetches["paths"]):
+        name, _ = os.path.splitext(os.path.basename(in_path.decode("utf8")))
+        fileset = {"name": name, "step": None}
+        for kind in ["inputs", "outputs", "targets"]:
+            filename = name + "-" + kind + ".png"
+            fileset[kind] = filename
+            out_path = os.path.join(image_dir, filename)
+            contents = fetches[kind][i]
+            with open(out_path, "wb") as f:
+                f.write(contents)
+        filesets.append(fileset)
+    return filesets
+
+    # start = time.time()
+    # max_steps = min(examples.steps_per_epoch, max_steps)
+    # for step in range(max_steps):
+    #     results = sess.run(display_fetches)
+    #     filesets = save_images(results)
+    #     for i, f in enumerate(filesets):
+    #         print("evaluated image", f["name"])
+    #     index_path = append_index(filesets)
+    # print("wrote index at", index_path)
+    # print("rate", (time.time() - start) / max_steps)
+
 
 def main():
     if a.seed is None:
@@ -544,9 +593,9 @@ def main():
     if not os.path.exists(a.output_dir):
         os.makedirs(a.output_dir)
 
-    if a.mode == "test" or a.mode == "export":
+    if a.mode == "test" or a.mode == "export" or a.mode == "pixelPerfect":
         if a.checkpoint is None:
-            raise Exception("checkpoint required for test mode")
+            raise Exception("checkpoint required for mode: " + a.mode)
 
         # load some options from the checkpoint
         options = {"which_direction", "ngf", "ndf", "lab_colorization"}
@@ -723,14 +772,19 @@ def main():
         if a.max_steps is not None:
             max_steps = a.max_steps
 
-        if a.mode == "test":
+        if a.mode == "test" or a.mode == "pixelPerfect":
             # testing
             # at most, process the test data once
             start = time.time()
             max_steps = min(examples.steps_per_epoch, max_steps)
             for step in range(max_steps):
                 results = sess.run(display_fetches)
-                filesets = save_images(results)
+
+                if a.mode == "test":
+                    filesets = save_images(results)
+                else:
+                    filesets = pixelPerfect(results)
+
                 for i, f in enumerate(filesets):
                     print("evaluated image", f["name"])
                 index_path = append_index(filesets)
