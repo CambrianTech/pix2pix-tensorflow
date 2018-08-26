@@ -14,6 +14,7 @@ import math
 import time
 import io
 from scipy import misc
+import cv2
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_dir", help="path to folder containing images")
@@ -541,7 +542,7 @@ def append_index(filesets, step=False):
 # --which_direction AtoB \
 # --checkpoint=CamVidAB_train
 
-def pixelPerfect(fetches):
+def pixelPerfect(fetches, src_contribution=0.3, dest_channel=2):
 # 1) run training images in test mode:
 # python pix2pix.py 
 # --mode test 
@@ -572,6 +573,12 @@ def pixelPerfect(fetches):
 
         a_image = images["outputs"]
         b_image = images["targets"]
+
+        if src_contribution > 0.0:
+            a_image = cv2.cvtColor(a_image, cv2.COLOR_RGB2HSV)
+            src_intensity = cv2.cvtColor(images["inputs"], cv2.COLOR_RGB2GRAY)
+            a_image[:,:,dest_channel] = cv2.addWeighted(a_image[:,:,dest_channel],1.0-src_contribution,src_intensity,src_contribution,0)
+            a_image = cv2.cvtColor(a_image, cv2.COLOR_HSV2RGB)
 
         ha,wa = a_image.shape[:2]
         
