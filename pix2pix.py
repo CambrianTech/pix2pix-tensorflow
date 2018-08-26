@@ -542,7 +542,7 @@ def append_index(filesets, step=False):
 # --which_direction AtoB \
 # --checkpoint=CamVidAB_train
 
-def pixelPerfect(fetches, src_contribution=0.3, dest_channel=2):
+def pixelPerfect(fetches, src_contribution=0.5, dest_channel=2):
 # 1) run training images in test mode:
 # python pix2pix.py 
 # --mode test 
@@ -554,8 +554,7 @@ def pixelPerfect(fetches, src_contribution=0.3, dest_channel=2):
 #
 # 2) Build A/B image from target and output
 # 3) retrain!
-    
-    image_dir = os.path.join(a.output_dir, "images")
+    image_dir = a.output_dir
     if not os.path.exists(image_dir):
         os.makedirs(image_dir)
 
@@ -637,8 +636,9 @@ def main():
     for k, v in a._get_kwargs():
         print(k, "=", v)
 
-    with open(os.path.join(a.output_dir, "options.json"), "w") as f:
-        f.write(json.dumps(vars(a), sort_keys=True, indent=4))
+    if a.mode != "pixelPerfect":
+        with open(os.path.join(a.output_dir, "options.json"), "w") as f:
+            f.write(json.dumps(vars(a), sort_keys=True, indent=4))
 
     if a.mode == "export":
         # export the generator to a meta graph that can be imported later for standalone generation
@@ -782,7 +782,9 @@ def main():
 
     saver = tf.train.Saver(max_to_keep=1)
 
-    logdir = a.output_dir if (a.trace_freq > 0 or a.summary_freq > 0) else None
+    logdir = None
+    if a.mode != "pixelPerfect":
+        logdir = a.output_dir if (a.trace_freq > 0 or a.summary_freq > 0) else None
     sv = tf.train.Supervisor(logdir=logdir, save_summaries_secs=0, saver=None)
     with sv.managed_session() as sess:
         print("parameter_count =", sess.run(parameter_count))
