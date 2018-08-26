@@ -12,6 +12,7 @@ import random
 import collections
 import math
 import time
+from scipy import misc
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_dir", help="path to folder containing images")
@@ -560,6 +561,7 @@ def pixelPerfect(fetches):
     for i, in_path in enumerate(fetches["paths"]):
         name, _ = os.path.splitext(os.path.basename(in_path.decode("utf8")))
         fileset = {"name": name, "step": None}
+
         for kind in ["inputs", "outputs", "targets"]:
             filename = name + "-" + kind + ".png"
             fileset[kind] = filename
@@ -567,7 +569,22 @@ def pixelPerfect(fetches):
             contents = fetches[kind][i]
             with open(out_path, "wb") as f:
                 f.write(contents)
-        filesets.append(fileset)
+
+        a_image = misc.imread(os.path.join(image_dir, name + "-" + "outputs" + ".png"))
+        b_image = misc.imread(os.path.join(image_dir, name + "-" + "targets" + ".png"))
+
+        ha,wa = a_image.shape[:2]
+        
+        total_width = 2 * wa
+        combined_img = np.zeros(shape=(ha, total_width, 3)) 
+
+        combined_img[:ha,:wa]=a_image
+        combined_img[:ha,wa:total_width]=b_image
+
+        print(name)
+        combined_img_path = os.path.join(image_dir, name + "-ab.png")
+        misc.imsave(combined_img_path, combined_img)
+
     return filesets
 
     # start = time.time()
@@ -772,7 +789,20 @@ def main():
         if a.max_steps is not None:
             max_steps = a.max_steps
 
-        if a.mode == "test" or a.mode == "pixelPerfect":
+        if a.mode == "test":
+            # testing
+            # at most, process the test data once
+            start = time.time()
+            max_steps = min(examples.steps_per_epoch, max_steps)
+            for step in range(max_steps):
+                results = sess.run(display_fetches)
+                filesets = save_images(results)
+                for i, f in enumerate(filesets):
+                    print("evaluated image", f["name"])
+                index_path = append_index(filesets)
+            print("wrote index at", index_path)
+            print("rate", (time.time() - start) / max_steps)
+        elif a.mode == "pixelPerfect":
             # testing
             # at most, process the test data once
             start = time.time()
@@ -780,16 +810,11 @@ def main():
             for step in range(max_steps):
                 results = sess.run(display_fetches)
 
-                if a.mode == "test":
-                    filesets = save_images(results)
-                else:
-                    filesets = pixelPerfect(results)
+                filesets = pixelPerfect(results)
 
                 for i, f in enumerate(filesets):
-                    print("evaluated image", f["name"])
-                index_path = append_index(filesets)
-            print("wrote index at", index_path)
-            print("rate", (time.time() - start) / max_steps)
+                    print("Converted image", f["name"])
+
         else:
             # training
             start = time.time()
