@@ -246,6 +246,34 @@ The following models have not been implemented:
 - defineG_unet_128
 - defineD_pixelGAN
 
+## Converting data to A/B Format
+
+Fortunately there's a utility to convert images to the A/B horizontally stacked format that this expects
+
+For instance, to convert the CamVid dataset in three steps.
+
+Training:
+```
+python ab_converter.py \
+  --a_input_dir=CamVid/train \
+  --b_input_dir=CamVid/train_labels \
+  --output_dir=CamVidAB/train \
+```
+Test:
+```
+python ab_converter.py \
+  --a_input_dir=CamVid/test \
+  --b_input_dir=CamVid/test_labels \
+  --output_dir=CamVidAB/test \
+```
+Validation:
+```
+python ab_converter.py \
+  --a_input_dir=CamVid/val \
+  --b_input_dir=CamVid/val_labels \
+  --output_dir=CamVidAB/val \
+```
+
 ## Citation
 If you use this code for your research, please cite the paper this code is based on: <a href="https://arxiv.org/pdf/1611.07004v1.pdf">Image-to-Image Translation Using Conditional Adversarial Networks</a>:
 
