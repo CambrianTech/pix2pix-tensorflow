@@ -17,6 +17,7 @@ from scipy import misc
 import cv2
 
 from tensorflow.python.framework import graph_util
+from tensorflow.tools.graph_transforms import TransformGraph
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_dir", help="path to folder containing images")
@@ -24,7 +25,8 @@ parser.add_argument("--mode", required=True, choices=["train", "test", "export",
 parser.add_argument("--output_dir", required=True, help="where to put output files")
 parser.add_argument("--seed", type=int)
 parser.add_argument("--checkpoint", default=None, help="directory with checkpoint to resume training from or use for testing")
-
+parser.add_argument("--transform_ops", default="strip_unused_nodes,add_default_attributes,remove_nodes(op=Identity, op=CheckNumerics),\
+    fold_constants(ignore_errors=true),fold_batch_norms,fold_old_batch_norms,round_weights,sort_by_execution_order")
 parser.add_argument("--max_steps", type=int, help="number of training steps (0 to disable)")
 parser.add_argument("--max_epochs", type=int, help="number of training epochs")
 parser.add_argument("--summary_freq", type=int, default=100, help="update summaries every summary_freq steps")
@@ -794,7 +796,13 @@ def main():
         print("parameter_count =", sess.run(parameter_count))
 
         if a.mode == "deploy":
+            #python pix2pix.py --mode=deploy --output_dir=CamVidExport --checkpoint=../saved_models/CamVidCheckpoint --input_dir /Users/joelteply/Development/datasets/CamVid/train
             print("Exporting...")
+            
+            [print(n.name) for n in tf.get_default_graph().as_graph_def().node]
+
+            input_names = []
+            output_names = ["generator/decoder_1/output"]
             
             if a.checkpoint is not None:
                 print("loading model from checkpoint")
@@ -805,8 +813,13 @@ def main():
             output_graph_def = graph_util.convert_variables_to_constants(
                 sess, # The session is used to retrieve the weights
                 tf.get_default_graph().as_graph_def(), # The graph_def is used to retrieve the nodes
-                ["generator/decoder_1/output"] # The output node names are used to select the usefull nodes
+                output_names # The output node names are used to select the usefull nodes
             )
+
+            #strip nodes
+            transforms = a.transform_ops.split(',')
+            output_graph_def = TransformGraph(output_graph_def, input_names, output_names, transforms)
+
             path = os.path.join(a.output_dir, "output_graph.pb")
             with tf.gfile.GFile(path, "wb") as f:
                 f.write(output_graph_def.SerializeToString())
