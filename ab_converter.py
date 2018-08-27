@@ -14,6 +14,7 @@ import math
 import time
 from PIL import Image
 from scipy import misc
+import fnmatch
 
 #example usage:
 # CamVid dataset:
@@ -26,9 +27,10 @@ from scipy import misc
 # ADE20K dataset:
 # export datasets=../../datasets; \
 # python ab_converter.py \
-# --a_input_dir $datasets/ADE20K_2016_07_26/images/training \
-# --b_input_dir $datasets/ADE20K_2016_07_26/images/training \
-# --output_dir $datasets/ADE20K_2016_07_26/images/train
+# --input_dir $datasets/ADE20K_2016_07_26/images/training \
+# --a_match_exp "ADE_*.jpg" \
+# --b_match_exp "ADE_*_seg.png" \
+# --output_dir $datasets/ADE20KAB/train
 
 parser = argparse.ArgumentParser()
 
@@ -53,14 +55,16 @@ def is_valid_image(path):
         return False
     return True
 
-def get_image_paths(path):
+def get_image_paths(path, expression=None):
     file_names=[]
+    #print("Checking %s for images" % path)
+
     for file in os.listdir(path):
         file_path = os.path.join(path, file)
         if os.path.isdir(file_path):
-        	file_names.append(get_image_paths(file_path))
-        elif is_valid_image(file_path):
-            file_names.append(file_path)
+        	file_names.extend(get_image_paths(file_path, expression))
+        elif is_valid_image(file_path) and (expression is None or fnmatch.fnmatch(file, expression)):
+			file_names.append(file_path)
 
     file_names.sort()
 
@@ -117,6 +121,8 @@ def main():
 	if not a.input_dir is None:
 		if not hasParams(["a_match_exp", "b_match_exp"]):
 			return
+		a_names=get_image_paths(a.input_dir, a.a_match_exp)
+		b_names=get_image_paths(a.input_dir, a.b_match_exp)
 	else:
 		if not hasParams(["a_input_dir", "b_input_dir"]):
 			return
