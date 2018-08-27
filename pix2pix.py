@@ -16,9 +16,11 @@ import io
 from scipy import misc
 import cv2
 
+from tensorflow.python.framework import graph_util
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_dir", help="path to folder containing images")
-parser.add_argument("--mode", required=True, choices=["train", "test", "export", "pixelPerfect"])
+parser.add_argument("--mode", required=True, choices=["train", "test", "export", "pixelPerfect", "deploy"])
 parser.add_argument("--output_dir", required=True, help="where to put output files")
 parser.add_argument("--seed", type=int)
 parser.add_argument("--checkpoint", default=None, help="directory with checkpoint to resume training from or use for testing")
@@ -56,7 +58,6 @@ CROP_SIZE = 256
 
 Examples = collections.namedtuple("Examples", "paths, inputs, targets, count, steps_per_epoch")
 Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_L1, gen_grads_and_vars, train")
-
 
 def preprocess(image):
     with tf.name_scope("preprocess"):
@@ -388,7 +389,7 @@ def create_generator(generator_inputs, generator_outputs_channels):
         input = tf.concat([layers[-1], layers[0]], axis=3)
         rectified = tf.nn.relu(input)
         output = gen_deconv(rectified, generator_outputs_channels)
-        output = tf.tanh(output)
+        output = tf.tanh(output, name="output")
         layers.append(output)
 
     return layers[-1]
@@ -621,7 +622,7 @@ def main():
     if not os.path.exists(a.output_dir):
         os.makedirs(a.output_dir)
 
-    if a.mode == "test" or a.mode == "export" or a.mode == "pixelPerfect":
+    if a.mode == "test" or a.mode == "export" or a.mode == "deploy" or a.mode == "pixelPerfect":
         if a.checkpoint is None:
             raise Exception("checkpoint required for mode: " + a.mode)
 
@@ -791,6 +792,26 @@ def main():
     sv = tf.train.Supervisor(logdir=logdir, save_summaries_secs=0, saver=None)
     with sv.managed_session() as sess:
         print("parameter_count =", sess.run(parameter_count))
+
+        if a.mode == "deploy":
+            print("Exporting...")
+            
+            if a.checkpoint is not None:
+                print("loading model from checkpoint")
+                checkpoint = tf.train.latest_checkpoint(a.checkpoint)
+                saver.restore(sess, checkpoint)
+            
+            # We use a built-in TF helper to export variables to constants
+            output_graph_def = graph_util.convert_variables_to_constants(
+                sess, # The session is used to retrieve the weights
+                tf.get_default_graph().as_graph_def(), # The graph_def is used to retrieve the nodes
+                ["generator/decoder_1/output"] # The output node names are used to select the usefull nodes
+            )
+            path = os.path.join(a.output_dir, "output_graph.pb")
+            with tf.gfile.GFile(path, "wb") as f:
+                f.write(output_graph_def.SerializeToString())
+                print("%d ops in the final graph." % len(output_graph_def.node))
+            return
 
         if a.checkpoint is not None:
             print("loading model from checkpoint")
