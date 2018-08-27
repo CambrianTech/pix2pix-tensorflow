@@ -576,7 +576,10 @@ def pixelPerfect(fetches, src_contribution=0.5, dest_channel=2):
         if src_contribution > 0.0:
             a_image = cv2.cvtColor(a_image, cv2.COLOR_RGB2HSV)
             src_intensity = cv2.cvtColor(images["inputs"], cv2.COLOR_RGB2GRAY)
-            a_image[:,:,dest_channel] = cv2.addWeighted(a_image[:,:,dest_channel],1.0-src_contribution,src_intensity,src_contribution,0)
+
+            edges = cv2.Canny(src_intensity,100,80)
+
+            a_image[:,:,dest_channel] = cv2.addWeighted(a_image[:,:,dest_channel],1.0-src_contribution,edges,src_contribution,0)
             a_image = cv2.cvtColor(a_image, cv2.COLOR_HSV2RGB)
 
         ha,wa = a_image.shape[:2]

@@ -15,9 +15,33 @@ import time
 from PIL import Image
 from scipy import misc
 
+#example usage:
+# CamVid dataset:
+# export datasets=../../datasets; \
+# python ab_converter.py \
+# --a_input_dir $datasets/CamVid/train \
+# --b_input_dir $datasets/CamVid/train_labels \
+# --output_dir $datasets/CamVidAB/train
+
+# ADE20K dataset:
+# export datasets=../../datasets; \
+# python ab_converter.py \
+# --a_input_dir $datasets/ADE20K_2016_07_26/images/training \
+# --b_input_dir $datasets/ADE20K_2016_07_26/images/training \
+# --output_dir $datasets/ADE20K_2016_07_26/images/train
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--a_input_dir", required=True, help="Source Input, image A, usually rgb camera data")
-parser.add_argument("--b_input_dir", required=True, help="Target Input, image B, usually labels")
+
+# required together:
+parser.add_argument("--a_input_dir", required=False, help="Source Input, image A, usually rgb camera data")
+parser.add_argument("--b_input_dir", required=False, help="Target Input, image B, usually labels")
+
+# required together:
+parser.add_argument("--input_dir", required=False, help="Combined Source and Target Input Path")
+parser.add_argument("--a_match_exp", required=False, help="Source Input expression to match files")
+parser.add_argument("--b_match_exp", required=False, help="Source Input expression to match files")
+
+# Place to output A/B images
 parser.add_argument("--output_dir", required=True, help="where to put output files")
 
 a = parser.parse_args()
@@ -33,53 +57,74 @@ def get_image_paths(path):
     file_names=[]
     for file in os.listdir(path):
         file_path = os.path.join(path, file)
-        if is_valid_image(file_path):
+        if os.path.isdir(file_path):
+        	file_names.append(get_image_paths(file_path))
+        elif is_valid_image(file_path):
             file_names.append(file_path)
 
     file_names.sort()
 
     return file_names
 
+def processFiles(a_names, b_names):
+	num_a = len(a_names)
+	num_b = len(b_names)
+
+	if (num_a != num_b):
+	    print("A and B directories must contain the same number of images", num_a, num_b)
+	    return
+
+	if not os.path.exists(a.output_dir):
+	    os.makedirs(a.output_dir)
+
+	for i in range(0, num_a):
+	    a_name = a_names[i]
+	    b_name = b_names[i]
+
+	    a_image = misc.imread(a_name)
+	    b_image = misc.imread(b_name)
+
+	    ha,wa = a_image.shape[:2]
+	    hb,wb = b_image.shape[:2]
+
+	    if (ha != hb or wa != wb):
+	        print("A and B images must match but do not for ", a_name, b_name)
+	        return
+
+	    total_width = 2 * wa
+	    combined_img = np.zeros(shape=(ha, total_width, 3))
+
+	    combined_img[:ha,:wa]=a_image
+	    combined_img[:ha,wa:total_width]=b_image
+
+	    combined_img_name = os.path.basename(a_name)
+	    combined_img_path = os.path.join(a.output_dir, combined_img_name)
+	    
+	    misc.imsave(combined_img_path, combined_img)
+
+	    print ("%s + %s = %s" % (a_name, b_name, combined_img_path))
+
+def hasParams(params):
+	for param in params:
+		paramValue = eval("a." + param)
+		if paramValue is None:
+			print("Error: argument --b_input_dir is required")
+			return False
+	return True
+
 def main():
 
-    a_names=get_image_paths(a.a_input_dir)
-    b_names=get_image_paths(a.b_input_dir)
+	if not a.input_dir is None:
+		if not hasParams(["a_match_exp", "b_match_exp"]):
+			return
+	else:
+		if not hasParams(["a_input_dir", "b_input_dir"]):
+			return
+		a_names=get_image_paths(a.a_input_dir)
+		b_names=get_image_paths(a.b_input_dir)
 
-    num_a = len(a_names)
-    num_b = len(b_names)
+	processFiles(a_names, b_names)	
 
-    if (num_a != num_b):
-        print("A and B directories must contain the same number of images", num_a, num_b)
-        return
     
-    if not os.path.exists(a.output_dir):
-        os.makedirs(a.output_dir)
-
-    for i in range(0, num_a):
-        a_name = a_names[i]
-        b_name = b_names[i]
-
-        a_image = misc.imread(a_name)
-        b_image = misc.imread(b_name)
-
-        ha,wa = a_image.shape[:2]
-        hb,wb = b_image.shape[:2]
-
-        if (ha != hb or wa != wb):
-            print("A and B images must match but do not for ", a_name, b_name)
-            return
-
-        total_width = 2 * wa
-        combined_img = np.zeros(shape=(ha, total_width, 3))
-
-        combined_img[:ha,:wa]=a_image
-        combined_img[:ha,wa:total_width]=b_image
-
-        combined_img_name = os.path.basename(a_name)
-        combined_img_path = os.path.join(a.output_dir, combined_img_name)
-        
-        misc.imsave(combined_img_path, combined_img)
-
-        print (a_name, b_name)
 
 main()
