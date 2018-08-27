@@ -15,6 +15,7 @@ import time
 from PIL import Image
 from scipy import misc
 import fnmatch
+import cv2
 
 #example usage:
 # CamVid dataset:
@@ -86,7 +87,12 @@ def processFiles(a_names, b_names):
 	    b_name = b_names[i]
 
 	    a_image = misc.imread(a_name)
+	    if (len(a_image)<3):
+	    	a_image = cv2.cvtColor(a_image, cv2.COLOR_GRAY2RGB)
+
 	    b_image = misc.imread(b_name)
+	    if (len(b_image)<3):
+	    	b_image = cv2.cvtColor(b_image, cv2.COLOR_GRAY2RGB)
 
 	    ha,wa = a_image.shape[:2]
 	    hb,wb = b_image.shape[:2]
