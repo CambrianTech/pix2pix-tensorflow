@@ -35,9 +35,11 @@ import re
 # --b_match_exp "ADE_*_seg.png" \
 # --output_dir $datasets/ADE20K_indoor_AB/train
 
-# python pix2pix.py --mode train --output_dir ade20k_train --max_epochs 2000 --input_dir $datasets/ADE20KAB/train --which_direction AtoB
+# My notes:
+# python pix2pix.py --mode=deploy --output_dir=CamVidExport --checkpoint=../saved_models/CamVidCheckpoint --input_dir $datasets/datasets/CamVid/train
+# python pix2pix.py --mode train --output_dir ade20k_train --max_epochs 2000 --input_dir $datasets/ADE20K_indoor_AB/train --which_direction AtoB --lr=0.0001 --batch_size=10
 
-# python pix2pix.py --mode train --output_dir ade20k_train --max_epochs 2000 --input_dir ADE20KAB/train --which_direction AtoB
+# python pix2pix.py --mode train --output_dir ade20k_train --max_epochs 2000 --input_dir ADE20KAB/train --which_direction AtoB --lr=0.0001 --batch_size=10
 
 parser = argparse.ArgumentParser()
 
