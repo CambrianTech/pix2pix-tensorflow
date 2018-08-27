@@ -16,8 +16,9 @@ import io
 from scipy import misc
 import cv2
 
-from tensorflow.python.framework import graph_util
+from tensorflow.python.framework import graph_util,dtypes
 from tensorflow.tools.graph_transforms import TransformGraph
+from tensorflow.python.tools import optimize_for_inference_lib, selective_registration_header_lib
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_dir", help="path to folder containing images")
@@ -703,6 +704,63 @@ def main():
 
         return
 
+    if a.mode == "deploy":
+        # export the generator to a meta graph that can be imported later for standalone generation
+        if a.lab_colorization:
+            raise Exception("export not supported for lab_colorization")
+
+        shape = [CROP_SIZE, CROP_SIZE, 3]
+        input_image = tf.placeholder(dtype=tf.float32, shape=shape, name='input')
+        batch_input = tf.expand_dims(input_image, axis=0)
+
+        with tf.variable_scope("generator"):
+            batch_output = deprocess(create_generator(preprocess(batch_input), 3))
+
+        output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
+        output_image = tf.identity(output_image, name='output')
+
+        input_name = input_image.name.split(':')[0]
+        output_name = output_image.name.split(':')[0]
+
+         #[print(n.name) for n in tf.get_default_graph().as_graph_def().node]
+        print("Input Name:", input_name)
+        print("Output Name:", output_name)
+
+        init_op = tf.global_variables_initializer()
+        restore_saver = tf.train.Saver()
+        export_saver = tf.train.Saver()
+
+        with tf.Session() as sess:
+            sess.run(init_op)
+            print("\nLoading model from checkpoint")
+            checkpoint = tf.train.latest_checkpoint(a.checkpoint)
+            restore_saver.restore(sess, checkpoint)
+            
+            print("\nDeploying model")
+            output_graph_def = graph_util.convert_variables_to_constants(sess, tf.get_default_graph().as_graph_def(), [output_name])
+
+            print("\nStripping model")
+            if not a.transform_ops is None:
+                transforms = a.transform_ops.split(',')
+                output_graph_def = TransformGraph(output_graph_def, [input_name], [output_name], transforms)
+
+            #print("\n##### Optimizing model:") #issue: Didn't find expected Conv2D input to 'generator/encoder_2/batch_normalization/FusedBatchNorm'
+            #output_graph_def = optimize_for_inference_lib.optimize_for_inference(output_graph_def, [input_name], [output_name], dtypes.float32.as_datatype_enum)
+
+            path = os.path.join(a.output_dir, "output_graph.pb")
+            with tf.gfile.GFile(path, "wb") as f:
+                f.write(output_graph_def.SerializeToString())
+
+            print("\nCreating selective registration header", path)
+            
+            with open(os.path.join(a.output_dir, "options.h"), "w") as f:
+                header_str = selective_registration_header_lib.get_header([path], 'rawproto', 'NoOp:NoOp,_Recv:RecvOp,_Send:SendOp')
+                f.write(header_str)
+
+            print("Finished: %d ops in the final graph." % len(output_graph_def.node))
+
+        return
+
     examples = load_examples()
     print("examples count = %d" % examples.count)
 
@@ -794,37 +852,6 @@ def main():
     sv = tf.train.Supervisor(logdir=logdir, save_summaries_secs=0, saver=None)
     with sv.managed_session() as sess:
         print("parameter_count =", sess.run(parameter_count))
-
-        if a.mode == "deploy":
-            #python pix2pix.py --mode=deploy --output_dir=CamVidExport --checkpoint=../saved_models/CamVidCheckpoint --input_dir /Users/joelteply/Development/datasets/CamVid/train
-            print("Exporting...")
-            
-            [print(n.name) for n in tf.get_default_graph().as_graph_def().node]
-
-            input_names = []
-            output_names = ["generator/decoder_1/output"]
-            
-            if a.checkpoint is not None:
-                print("loading model from checkpoint")
-                checkpoint = tf.train.latest_checkpoint(a.checkpoint)
-                saver.restore(sess, checkpoint)
-            
-            # We use a built-in TF helper to export variables to constants
-            output_graph_def = graph_util.convert_variables_to_constants(
-                sess, # The session is used to retrieve the weights
-                tf.get_default_graph().as_graph_def(), # The graph_def is used to retrieve the nodes
-                output_names # The output node names are used to select the usefull nodes
-            )
-
-            #strip nodes
-            transforms = a.transform_ops.split(',')
-            output_graph_def = TransformGraph(output_graph_def, input_names, output_names, transforms)
-
-            path = os.path.join(a.output_dir, "output_graph.pb")
-            with tf.gfile.GFile(path, "wb") as f:
-                f.write(output_graph_def.SerializeToString())
-                print("%d ops in the final graph." % len(output_graph_def.node))
-            return
 
         if a.checkpoint is not None:
             print("loading model from checkpoint")
