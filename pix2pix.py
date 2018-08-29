@@ -330,7 +330,7 @@ def load_examples():
             raw_input_a.set_shape([None, None, 3])
 
             b_contents = tf.read_file(path_queue[1])
-            raw_input_b = decode(a_contents)
+            raw_input_b = decode(b_contents)
             raw_input_b = tf.image.convert_image_dtype(raw_input_b, dtype=tf.float32)            
 
             assertion = tf.assert_equal(tf.shape(raw_input_b)[2], 3, message="image does not have 3 channels")
