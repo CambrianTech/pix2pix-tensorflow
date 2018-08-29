@@ -18,7 +18,6 @@ import fnmatch
 import cv2
 import re
 
-
 def is_valid_image(path):
     try:
         Image.open(path)
@@ -85,7 +84,7 @@ def getABImagePaths(args):
 
         if not os.path.isfile(args.filter_categories): 
             print("Error: filter_categories file %s does not exist" % args.filter_categories)
-            return
+            return [], []
 
         filtered_dirs = []
 
@@ -102,11 +101,11 @@ def getABImagePaths(args):
 
     if not args.input_dir is None:
         if not hasParams(args, ["a_match_exp", "b_match_exp"]):
-            return
+            return [], []
 
         if not os.path.isdir(args.input_dir): 
             print("Error: input_dir %s does not exist" % args.input_dir)
-            return
+            return [], []
 
         if not filtered_dirs is None:
             filtered_dirs.append(os.path.basename(args.input_dir))
@@ -115,15 +114,15 @@ def getABImagePaths(args):
         b_names=get_image_paths(args.input_dir, args.b_match_exp, filtered_dirs=filtered_dirs)
     else:
         if not hasParams(args, ["a_input_dir", "b_input_dir"]):
-            return a_names, b_names
+            return [], []
 
         if not os.path.isdir(args.a_input_dir): 
             print("Error: a_input_dir %s does not exist" % args.a_input_dir)
-            return a_names, b_names
+            return [], []
 
         if not os.path.isdir(args.b_input_dir): 
             print("Error: b_input_dir %s does not exist" % args.b_input_dir)
-            return
+            return [], []
 
         if not filtered_dirs is None:
             filtered_dirs.append(os.path.basename(args.a_input_dir))
