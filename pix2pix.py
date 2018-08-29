@@ -263,15 +263,18 @@ def load_examples():
     a_names = []
     b_names = []
     combined_names = []
+    num_images = 0
 
     if not a.a_input_dir is None or not a.a_match_exp is None:
         a_names, b_names = utils.getABImagePaths(a)
-        num_images = len(a_names)
+        if not a_names is None:
+            num_images = len(a_names)
     else:
         combined_names=get_image_paths(a.input_dir, a.input_match_exp, filtered_dirs=filtered_dirs)
-        num_images = len(combined_names)
+        if not combined_names is None:
+            num_images = len(combined_names)
 
-    if len(combined_names) == 0 and len(a_names) == 0:
+    if num_images == 0:
         raise Exception("No images found at input path")
 
     if len(a_names) > 0:
@@ -319,21 +322,25 @@ def load_examples():
             path_queue = tf.train.slice_input_producer([a_names, b_names], shuffle=a.mode == "train")
             paths = path_queue
 
+            a_path = tf.decode_raw(path_queue[0], tf.uint8)
+            print("A Image path is ", a_path)
             a_contents = tf.read_file(path_queue[0])
             raw_input_a = decode(a_contents)
             raw_input_a = tf.image.convert_image_dtype(raw_input_a, dtype=tf.float32)
 
-            assertion = tf.assert_equal(tf.shape(raw_input_a)[2], 3, message="image does not have 3 channels")
+            assertion = tf.assert_equal(tf.shape(raw_input_a)[2], 3, message="image %s does not have 3 channels".format(a_path))
             with tf.control_dependencies([assertion]):
                 raw_input_a = tf.identity(raw_input_a)
 
             raw_input_a.set_shape([None, None, 3])
 
+            b_path = tf.decode_raw(path_queue[1], tf.uint8)
+            print("B Image path is ", b_path)
             b_contents = tf.read_file(path_queue[1])
             raw_input_b = decode(b_contents)
             raw_input_b = tf.image.convert_image_dtype(raw_input_b, dtype=tf.float32)            
 
-            assertion = tf.assert_equal(tf.shape(raw_input_b)[2], 3, message="image does not have 3 channels")
+            assertion = tf.assert_equal(tf.shape(raw_input_b)[2], 3, message="image %s does not have 3 channels".format(b_path))
             with tf.control_dependencies([assertion]):
                 raw_input_b = tf.identity(raw_input_b)
 

@@ -53,6 +53,17 @@ import utils
 # --which_direction AtoB \
 # --lr=0.0001 --batch_size=10
 
+# export datasets=~/datasets; \
+# python pix2pix.py --mode train \
+# --output_dir normals_train \
+# --max_epochs 2000 \
+# --a_input_dir $datasets/mlt_v2_subset \
+# --a_match_exp '*.png' \
+# --b_input_dir $datasets/normals_v2_subset \
+# --b_match_exp '*_norm_camera.png' \
+# --which_direction AtoB \
+# --lr=0.0001 --batch_size=10
+
 parser = argparse.ArgumentParser()
 
 # required together:
