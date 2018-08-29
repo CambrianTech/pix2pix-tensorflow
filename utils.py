@@ -28,7 +28,8 @@ def is_valid_image(path):
 def get_image_paths(path, expression=None, filtered_dirs=None):
     file_names=[]
 
-    #print("Checking %s for images" % path)
+    #print("Checking for images at ", path, expression)
+
     valid_image_dir = True
 
     if not filtered_dirs is None and not os.path.basename(path) in filtered_dirs:
@@ -99,20 +100,7 @@ def getABImagePaths(args):
                 category = category_search.group(1)
                 filtered_dirs.append(category)
 
-    if not args.input_dir is None:
-        if not hasParams(args, ["a_match_exp", "b_match_exp"]):
-            return [], []
-
-        if not os.path.isdir(args.input_dir): 
-            print("Error: input_dir %s does not exist" % args.input_dir)
-            return [], []
-
-        if not filtered_dirs is None:
-            filtered_dirs.append(os.path.basename(args.input_dir))
-
-        a_names=get_image_paths(args.input_dir, args.a_match_exp, filtered_dirs=filtered_dirs)
-        b_names=get_image_paths(args.input_dir, args.b_match_exp, filtered_dirs=filtered_dirs)
-    else:
+    if not args.a_input_dir is None:
         if not hasParams(args, ["a_input_dir", "b_input_dir"]):
             return [], []
 
@@ -128,8 +116,22 @@ def getABImagePaths(args):
             filtered_dirs.append(os.path.basename(args.a_input_dir))
             filtered_dirs.append(os.path.basename(args.b_input_dir))
 
-        a_names=get_image_paths(args.a_input_dir, filtered_dirs=filtered_dirs)
-        b_names=get_image_paths(args.b_input_dir, filtered_dirs=filtered_dirs)
+        a_names=get_image_paths(args.a_input_dir, args.a_match_exp, filtered_dirs=filtered_dirs)
+        b_names=get_image_paths(args.b_input_dir, args.b_match_exp, filtered_dirs=filtered_dirs)
+    else:
+
+        if not hasParams(args, ["a_match_exp", "b_match_exp"]):
+            return [], []
+
+        if not os.path.isdir(args.input_dir): 
+            print("Error: input_dir %s does not exist" % args.input_dir)
+            return [], []
+
+        if not filtered_dirs is None:
+            filtered_dirs.append(os.path.basename(args.input_dir))
+
+        a_names=get_image_paths(args.input_dir, args.a_match_exp, filtered_dirs=filtered_dirs)
+        b_names=get_image_paths(args.input_dir, args.b_match_exp, filtered_dirs=filtered_dirs)
 
     return a_names, b_names
 
