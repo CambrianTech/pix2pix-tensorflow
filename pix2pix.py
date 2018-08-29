@@ -16,12 +16,21 @@ import io
 from scipy import misc
 import cv2
 
+import utils
+
 from tensorflow.python.framework import graph_util,dtypes
 from tensorflow.tools.graph_transforms import TransformGraph
 from tensorflow.python.tools import optimize_for_inference_lib, selective_registration_header_lib
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--input_dir", help="path to folder containing images")
+
+parser.add_argument("--a_input_dir", required=False, help="Source Input, image A, usually rgb camera data")
+parser.add_argument("--b_input_dir", required=False, help="Target Input, image B, usually labels")
+
+parser.add_argument("--input_dir", required=False, help="Combined Source and Target Input Path")
+parser.add_argument("--a_match_exp", required=False, help="Source Input expression to match files")
+parser.add_argument("--b_match_exp", required=False, help="Source Input expression to match files")
+
 parser.add_argument("--mode", required=True, choices=["train", "test", "export", "pixelPerfect", "deploy"])
 parser.add_argument("--output_dir", required=True, help="where to put output files")
 parser.add_argument("--seed", type=int)
