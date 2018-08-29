@@ -28,8 +28,10 @@ parser.add_argument("--a_input_dir", required=False, help="Source Input, image A
 parser.add_argument("--b_input_dir", required=False, help="Target Input, image B, usually labels")
 
 parser.add_argument("--input_dir", required=False, help="Combined Source and Target Input Path")
+parser.add_argument("--input_match_exp", required=False, help="Input Match Expression")
 parser.add_argument("--a_match_exp", required=False, help="Source Input expression to match files")
 parser.add_argument("--b_match_exp", required=False, help="Source Input expression to match files")
+parser.add_argument("--filter_categories", required=False, help="Path to file with valid categories")
 
 parser.add_argument("--mode", required=True, choices=["train", "test", "export", "pixelPerfect", "deploy"])
 parser.add_argument("--output_dir", required=True, help="where to put output files")
@@ -245,55 +247,102 @@ def lab_to_rgb(lab):
 
         return tf.reshape(srgb_pixels, tf.shape(lab))
 
+def read_images_from_disk(input_queue):
+    """Consumes a single filename and label as a ' '-delimited string.
+    Args:
+      filename_and_label_tensor: A scalar string tensor.
+    Returns:
+      Two tensors: the decoded image, and the string label.
+    """
+    label = input_queue[1]
+    file_contents = tf.read_file(input_queue[0])
+    example = tf.image.decode_png(file_contents, channels=3)
+    return example, label
 
 def load_examples():
-    if a.input_dir is None or not os.path.exists(a.input_dir):
-        raise Exception("input_dir does not exist")
 
-    input_paths = glob.glob(os.path.join(a.input_dir, "*.jpg"))
-    decode = tf.image.decode_jpeg
-    if len(input_paths) == 0:
-        input_paths = glob.glob(os.path.join(a.input_dir, "*.png"))
+    a_names = []
+    b_names = []
+    combined_names = []
+
+    if not a.a_input_dir is None or not a.a_match_exp is None:
+        a_names, b_names = utils.getABImagePaths(a)
+        num_images = len(a_names)
+    else:
+        combined_names=get_image_paths(a.input_dir, a.input_match_exp, filtered_dirs=filtered_dirs)
+        num_images = len(combined_names)
+
+    if len(combined_names) == 0 and len(a_names) == 0:
+        raise Exception("No images found at input path")
+
+    if len(a_names) > 0:
+        filename, file_extension = os.path.splitext(a_names[0])
+    else:
+        filename, file_extension = os.path.splitext(combined_names[0])
+
+    if file_extension == ".png":
         decode = tf.image.decode_png
-
-    if len(input_paths) == 0:
+    elif file_extension == ".jpg" or file_extension == ".jpeg":
+        decode = tf.image.decode_jpeg
+    else:
         raise Exception("input_dir contains no image files")
-
+    
     def get_name(path):
         name, _ = os.path.splitext(os.path.basename(path))
         return name
 
-    # if the image names are numbers, sort by the value rather than asciibetically
-    # having sorted inputs means that the outputs are sorted in test mode
-    if all(get_name(path).isdigit() for path in input_paths):
-        input_paths = sorted(input_paths, key=lambda path: int(get_name(path)))
-    else:
-        input_paths = sorted(input_paths)
-
     with tf.name_scope("load_images"):
-        path_queue = tf.train.string_input_producer(input_paths, shuffle=a.mode == "train")
-        reader = tf.WholeFileReader()
-        paths, contents = reader.read(path_queue)
-        raw_input = decode(contents)
-        raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
+        if len(combined_names) > 0:
+            path_queue = tf.train.string_input_producer(combined_names, shuffle=a.mode == "train")
+            reader = tf.WholeFileReader()
+            paths, contents = reader.read(path_queue)
+            raw_input = decode(contents)
+            raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
 
-        assertion = tf.assert_equal(tf.shape(raw_input)[2], 3, message="image does not have 3 channels")
-        with tf.control_dependencies([assertion]):
-            raw_input = tf.identity(raw_input)
+            assertion = tf.assert_equal(tf.shape(raw_input)[2], 3, message="image does not have 3 channels")
+            with tf.control_dependencies([assertion]):
+                raw_input = tf.identity(raw_input)
 
-        raw_input.set_shape([None, None, 3])
+            raw_input.set_shape([None, None, 3])
 
-        if a.lab_colorization:
-            # load color and brightness from image, no B image exists here
-            lab = rgb_to_lab(raw_input)
-            L_chan, a_chan, b_chan = preprocess_lab(lab)
-            a_images = tf.expand_dims(L_chan, axis=2)
-            b_images = tf.stack([a_chan, b_chan], axis=2)
+            if a.lab_colorization:
+                # load color and brightness from image, no B image exists here
+                lab = rgb_to_lab(raw_input)
+                L_chan, a_chan, b_chan = preprocess_lab(lab)
+                a_images = tf.expand_dims(L_chan, axis=2)
+                b_images = tf.stack([a_chan, b_chan], axis=2)
+            else:
+                # break apart image pair and move to range [-1, 1]
+                width = tf.shape(raw_input)[1] # [height, width, channels]
+                a_images = preprocess(raw_input[:,:width//2,:])
+                b_images = preprocess(raw_input[:,width//2:,:])
         else:
-            # break apart image pair and move to range [-1, 1]
-            width = tf.shape(raw_input)[1] # [height, width, channels]
-            a_images = preprocess(raw_input[:,:width//2,:])
-            b_images = preprocess(raw_input[:,width//2:,:])
+            path_queue = tf.train.slice_input_producer([a_names, b_names], shuffle=a.mode == "train")
+            paths = path_queue
+
+            a_contents = tf.read_file(path_queue[0])
+            raw_input_a = decode(a_contents)
+            raw_input_a = tf.image.convert_image_dtype(raw_input_a, dtype=tf.float32)
+
+            assertion = tf.assert_equal(tf.shape(raw_input_a)[2], 3, message="image does not have 3 channels")
+            with tf.control_dependencies([assertion]):
+                raw_input_a = tf.identity(raw_input_a)
+
+            raw_input_a.set_shape([None, None, 3])
+
+            b_contents = tf.read_file(path_queue[1])
+            raw_input_b = decode(a_contents)
+            raw_input_b = tf.image.convert_image_dtype(raw_input_b, dtype=tf.float32)            
+
+            assertion = tf.assert_equal(tf.shape(raw_input_b)[2], 3, message="image does not have 3 channels")
+            with tf.control_dependencies([assertion]):
+                raw_input_b = tf.identity(raw_input_b)
+
+            raw_input_b.set_shape([None, None, 3])
+
+            a_images = preprocess(raw_input_a)
+            b_images = preprocess(raw_input_b)
+    
 
     if a.which_direction == "AtoB":
         inputs, targets = [a_images, b_images]
@@ -328,13 +377,13 @@ def load_examples():
         target_images = transform(targets)
 
     paths_batch, inputs_batch, targets_batch = tf.train.batch([paths, input_images, target_images], batch_size=a.batch_size)
-    steps_per_epoch = int(math.ceil(len(input_paths) / a.batch_size))
+    steps_per_epoch = int(math.ceil(num_images / a.batch_size))
 
     return Examples(
         paths=paths_batch,
         inputs=inputs_batch,
         targets=targets_batch,
-        count=len(input_paths),
+        count=num_images,
         steps_per_epoch=steps_per_epoch,
     )
 
