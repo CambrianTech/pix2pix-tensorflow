@@ -75,15 +75,15 @@ def processFiles(a_names, b_names):
         a_name = a_names[i]
         b_name = b_names[i]
 
-    combined_img = utils.getCombinedImage(a_name, b_name)
+        combined_img = utils.getCombinedImage(a_name, b_name)
 
-    if not combined_img is None:
-        combined_img_name = os.path.basename(a_name)
-        combined_img_path = os.path.join(a.output_dir, combined_img_name)
+        if not combined_img is None:
+            combined_img_name = os.path.basename(a_name)
+            combined_img_path = os.path.join(a.output_dir, combined_img_name)
 
-        misc.imsave(combined_img_path, combined_img)
+            misc.imsave(combined_img_path, combined_img)
 
-        print ("%s + %s = %s" % (a_name, b_name, combined_img_path))        
+            print ("%s + %s = %s" % (a_name, b_name, combined_img_path))        
 
 def main():
 
