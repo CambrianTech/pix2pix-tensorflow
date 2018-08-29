@@ -19,7 +19,6 @@ import cv2
 import utils
 
 from tensorflow.python.framework import graph_util,dtypes
-from tensorflow.tools.graph_transforms import TransformGraph
 from tensorflow.python.tools import optimize_for_inference_lib, selective_registration_header_lib
 
 parser = argparse.ArgumentParser()
@@ -789,6 +788,8 @@ def main():
         export_saver = tf.train.Saver()
 
         with tf.Session() as sess:
+            from tensorflow.tools.graph_transforms import TransformGraph
+
             sess.run(init_op)
             print("\nLoading model from checkpoint")
             checkpoint = tf.train.latest_checkpoint(a.checkpoint)
