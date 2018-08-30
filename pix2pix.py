@@ -678,7 +678,7 @@ def pixelPerfect(fetches, src_contribution=0.5, dest_channel=2):
 
 def main():
 
-    print("Image flipping is turned" ('ON' if a.flip else 'OFF'))
+    print("Image flipping is turned", ('ON' if a.flip else 'OFF'))
 
     if a.seed is None:
         a.seed = random.randint(0, 2**31 - 1)
