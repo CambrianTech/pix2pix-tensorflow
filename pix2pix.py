@@ -270,7 +270,7 @@ def load_examples():
         if not a_names is None:
             num_images = len(a_names)
     else:
-        combined_names=utils.get_image_paths(a.input_dir, a.input_match_exp, filtered_dirs=filtered_dirs)
+        combined_names=utils.get_image_paths(a.input_dir, a.input_match_exp)
         if not combined_names is None:
             num_images = len(combined_names)
 
