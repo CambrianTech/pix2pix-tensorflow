@@ -28,10 +28,12 @@ def str2bool(v):
 
 def is_valid_image(path):
     try:
-        Image.open(path)
+        im=Image.open(path)
+        im.verify()
+        return im.mode() == "RGB"
     except IOError:
         return False
-    return True
+    return False
 
 def get_image_paths(path, expression=None, filtered_dirs=None):
     file_names=[]
