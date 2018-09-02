@@ -30,7 +30,7 @@ def is_valid_image(path):
     try:
         im=Image.open(path)
         im.verify()
-        return im.mode() == "RGB"
+        return im.mode == "RGB"
     except IOError:
         return False
     return False
