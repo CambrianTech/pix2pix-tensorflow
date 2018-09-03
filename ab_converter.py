@@ -37,32 +37,43 @@ import utils
 # --output_dir $datasets/ADE20K_indoor_AB/train
 
 # My notes:
-# python pix2pix.py --mode=deploy --output_dir=CamVidExport --checkpoint=../saved_models/CamVidCheckpoint --input_dir $datasets/datasets/CamVid/train
-# python pix2pix.py --mode train --output_dir ade20k_train --max_epochs 2000 --input_dir $datasets/ADE20K_indoor_AB/train --which_direction AtoB --lr=0.0001 --batch_size=10
-
+# Deploy::
+# python pix2pix.py --mode=deploy --output_dir=$CB/CBAssets/nnets --checkpoint=../../checkpoints/ade20k_train
+# Train:
 # python pix2pix.py --mode train --output_dir ade20k_train --max_epochs 2000 --input_dir ADE20KAB/train --which_direction AtoB --lr=0.0001 --batch_size=10
+# Download a lot of images:
+# googleimagesdownload --keywords "nose before and after" --size medium --limit 20000 --chromedriver="/usr/local/bin/chromedriver"
 
-# export datasets=~/Development/datasets; \
+# export datasets=/datasets; \
 # python pix2pix.py --mode train \
 # --output_dir normals_train \
 # --max_epochs 2000 \
-# --a_input_dir $datasets/mlt_v2_subset \
+# --a_input_dir $datasets/mlt_v2 \
 # --a_match_exp '*.png' \
-# --b_input_dir $datasets/normals_v2_subset \
+# --b_input_dir $datasets/normals_v2 \
+# --b_match_exp '*_norm_camera.png' \
+# --which_direction AtoB --no_flip \
+# --ngf=128 --ndf=128
+
+
+
+# export datasets=/datasets; \
+# python pix2pix.py --mode train \
+# --output_dir normals_train \
+# --max_epochs 2000 \
+# --a_input_dir $datasets/mlt_v2 \
+# --a_match_exp '*.png' \
+# --b_input_dir $datasets/normals_v2 \
 # --b_match_exp '*_norm_camera.png' \
 # --which_direction AtoB \
 # --lr=0.0001 --batch_size=10
 
-# export datasets=~/datasets; \
-# python pix2pix.py --mode train \
-# --output_dir normals_train \
-# --max_epochs 2000 \
-# --a_input_dir $datasets/mlt_v2_subset \
-# --a_match_exp '*.png' \
-# --b_input_dir $datasets/normals_v2_subset \
-# --b_match_exp '*_norm_camera.png' \
-# --which_direction AtoB \
-# --lr=0.0001 --batch_size=10
+export datasets=/datasets; \
+python pix2pix.py --mode train \
+--output_dir nosejobs_train \
+--max_epochs 2000 \
+--input_dir $datasets/nosejobs \
+--which_direction AtoB 
 
 parser = argparse.ArgumentParser()
 

@@ -24,6 +24,7 @@ from tensorflow.python.tools import optimize_for_inference_lib, selective_regist
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--a_input_dir", required=False, help="Source Input, image A, usually rgb camera data")
+parser.add_argument("--a_input_dir2", required=False, help="Second Source Input, image A, usually rgb camera data")
 parser.add_argument("--b_input_dir", required=False, help="Target Input, image B, usually labels")
 
 parser.add_argument("--input_dir", required=False, help="Combined Source and Target Input Path")
@@ -77,36 +78,10 @@ def preprocess(image):
         # [0, 1] => [-1, 1]
         return image * 2 - 1
 
-
 def deprocess(image):
     with tf.name_scope("deprocess"):
         # [-1, 1] => [0, 1]
         return (image + 1) / 2
-
-
-def preprocess_lab(lab):
-    with tf.name_scope("preprocess_lab"):
-        L_chan, a_chan, b_chan = tf.unstack(lab, axis=2)
-        # L_chan: black and white with input range [0, 100]
-        # a_chan/b_chan: color channels with input range ~[-110, 110], not exact
-        # [0, 100] => [-1, 1],  ~[-110, 110] => [-1, 1]
-        return [L_chan / 50 - 1, a_chan / 110, b_chan / 110]
-
-
-def deprocess_lab(L_chan, a_chan, b_chan):
-    with tf.name_scope("deprocess_lab"):
-        # this is axis=3 instead of axis=2 because we process individual images but deprocess batches
-        return tf.stack([(L_chan + 1) / 2 * 100, a_chan * 110, b_chan * 110], axis=3)
-
-
-def augment(image, brightness):
-    # (a, b) color channels, combine with L channel and convert to rgb
-    a_chan, b_chan = tf.unstack(image, axis=3)
-    L_chan = tf.squeeze(brightness, axis=3)
-    lab = deprocess_lab(L_chan, a_chan, b_chan)
-    rgb = lab_to_rgb(lab)
-    return rgb
-
 
 def discrim_conv(batch_input, out_channels, stride):
     padded_input = tf.pad(batch_input, [[0, 0], [1, 1], [1, 1], [0, 0]], mode="CONSTANT")
@@ -307,17 +282,14 @@ def load_examples():
 
             raw_input.set_shape([None, None, 3])
 
-            if a.lab_colorization:
-                # load color and brightness from image, no B image exists here
-                lab = rgb_to_lab(raw_input)
-                L_chan, a_chan, b_chan = preprocess_lab(lab)
-                a_images = tf.expand_dims(L_chan, axis=2)
-                b_images = tf.stack([a_chan, b_chan], axis=2)
-            else:
-                # break apart image pair and move to range [-1, 1]
-                width = tf.shape(raw_input)[1] # [height, width, channels]
-                a_images = preprocess(raw_input[:,:width//2,:])
-                b_images = preprocess(raw_input[:,width//2:,:])
+# https://github.com/affinelayer/pix2pix-tensorflow/issues/49
+# I think you will want to comment out / skip the colour space code 
+# as that will not work with more than three channels.
+# I am not sure whether you meant that just conceptually. 
+# But just to clarify, inputs need to be a TensorFlow tensor. 
+# If input1 and input2 are both TensorFlow tensors then 
+# you will want to use tf.concat to combine them together.
+
         else:
             path_queue = tf.train.slice_input_producer([a_names, b_names], shuffle=a.mode == "train")
             paths = path_queue
@@ -771,9 +743,6 @@ def main():
 
     if a.mode == "deploy":
         # export the generator to a meta graph that can be imported later for standalone generation
-        if a.lab_colorization:
-            raise Exception("export not supported for lab_colorization")
-
         shape = [CROP_SIZE, CROP_SIZE, 3]
         input_image = tf.placeholder(dtype=tf.float32, shape=shape, name='input')
         batch_input = tf.expand_dims(input_image, axis=0)
@@ -781,15 +750,18 @@ def main():
         with tf.variable_scope("generator"):
             batch_output = deprocess(create_generator(preprocess(batch_input), 3))
 
-        output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
-        output_image = tf.identity(output_image, name='output')
+        # output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
+        # output_image = tf.identity(output_image, name='output')
+        output_image = tf.identity(batch_output[0], name='output')
 
         input_name = input_image.name.split(':')[0]
         output_name = output_image.name.split(':')[0]
 
          #[print(n.name) for n in tf.get_default_graph().as_graph_def().node]
+        print("##############################################################\n")
         print("Input Name:", input_name)
         print("Output Name:", output_name)
+        print("##############################################################\n")
 
         init_op = tf.global_variables_initializer()
         restore_saver = tf.train.Saver()
@@ -799,20 +771,28 @@ def main():
             from tensorflow.tools.graph_transforms import TransformGraph
 
             sess.run(init_op)
+
+            print("##############################################################\n")
             print("\nLoading model from checkpoint")
             checkpoint = tf.train.latest_checkpoint(a.checkpoint)
             restore_saver.restore(sess, checkpoint)
             
-            print("\nDeploying model")
+            print("\nDeploying model, has %d ops" % len(tf.get_default_graph().as_graph_def().node))
             output_graph_def = graph_util.convert_variables_to_constants(sess, tf.get_default_graph().as_graph_def(), [output_name])
 
-            print("\nStripping model")
+            print("\nStripping model, has %d ops" % len(output_graph_def.node))
             if not a.transform_ops is None:
                 transforms = a.transform_ops.split(',')
                 output_graph_def = TransformGraph(output_graph_def, [input_name], [output_name], transforms)
 
+            print("\nRemoving training nodes, has %d ops" % len(output_graph_def.node))
+            output_graph_def = tf.graph_util.remove_training_nodes(output_graph_def, protected_nodes=None)
+
+
             #print("\n##### Optimizing model:") #issue: Didn't find expected Conv2D input to 'generator/encoder_2/batch_normalization/FusedBatchNorm'
             #output_graph_def = optimize_for_inference_lib.optimize_for_inference(output_graph_def, [input_name], [output_name], dtypes.float32.as_datatype_enum)
+
+            print("\nOutputting model in binary format, %d ops" % len(output_graph_def.node))
 
             path = os.path.join(a.output_dir, "output_graph.pb")
             with tf.gfile.GFile(path, "wb") as f:
@@ -824,7 +804,14 @@ def main():
                 header_str = selective_registration_header_lib.get_header([path], 'rawproto', 'NoOp:NoOp,_Recv:RecvOp,_Send:SendOp')
                 f.write(header_str)
 
+            #$TF_ROOT/bazel-bin/tensorflow/contrib/util/convert_graphdef_memmapped_format --in_graph=$CB/CBAssets/nnets/output_graph.pb --out_graph=$CB/CBAssets/nnets/ade20k.pb
+
             print("Finished: %d ops in the final graph." % len(output_graph_def.node))
+
+            [print(n.name) for n in output_graph_def.node]
+
+            print("##############################################################\n") 
+            print("IMPORTANT: Be sure to run: bazel-bin/tensorflow/contrib/util/convert_graphdef_memmapped_format")
 
         return
 
@@ -835,26 +822,9 @@ def main():
     model = create_model(examples.inputs, examples.targets)
 
     # undo colorization splitting on images that we use for display/output
-    if a.lab_colorization:
-        if a.which_direction == "AtoB":
-            # inputs is brightness, this will be handled fine as a grayscale image
-            # need to augment targets and outputs with brightness
-            targets = augment(examples.targets, examples.inputs)
-            outputs = augment(model.outputs, examples.inputs)
-            # inputs can be deprocessed normally and handled as if they are single channel
-            # grayscale images
-            inputs = deprocess(examples.inputs)
-        elif a.which_direction == "BtoA":
-            # inputs will be color channels only, get brightness from targets
-            inputs = augment(examples.inputs, examples.targets)
-            targets = deprocess(examples.targets)
-            outputs = deprocess(model.outputs)
-        else:
-            raise Exception("invalid direction")
-    else:
-        inputs = deprocess(examples.inputs)
-        targets = deprocess(examples.targets)
-        outputs = deprocess(model.outputs)
+    inputs = deprocess(examples.inputs)
+    targets = deprocess(examples.targets)
+    outputs = deprocess(model.outputs)
 
     def convert(image):
         if a.aspect_ratio != 1.0:
