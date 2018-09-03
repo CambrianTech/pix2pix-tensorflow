@@ -35,6 +35,7 @@ parser.add_argument("--filter_categories", required=False, help="Path to file wi
 
 parser.add_argument("--mode", required=True, choices=["train", "test", "export", "pixelPerfect", "deploy"])
 parser.add_argument("--output_dir", required=True, help="where to put output files")
+parser.add_argument("--deploy_name", default="model.pb", required=False, help="Deployment filename")
 parser.add_argument("--seed", type=int)
 parser.add_argument("--checkpoint", default=None, help="directory with checkpoint to resume training from or use for testing")
 parser.add_argument("--transform_ops", default="strip_unused_nodes,add_default_attributes, \
@@ -681,7 +682,7 @@ def main():
     for k, v in a._get_kwargs():
         print(k, "=", v)
 
-    if a.mode != "pixelPerfect":
+    if a.mode != "pixelPerfect" and a.mode != "deploy":
         with open(os.path.join(a.output_dir, "options.json"), "w") as f:
             f.write(json.dumps(vars(a), sort_keys=True, indent=4))
 
@@ -791,13 +792,13 @@ def main():
 
             print("\nOutputting model in binary format, %d ops" % len(output_graph_def.node))
 
-            path = os.path.join(a.output_dir, "output_graph.pb")
+            path = os.path.join(a.output_dir, a.deploy_name)
             with tf.gfile.GFile(path, "wb") as f:
                 f.write(output_graph_def.SerializeToString())
 
             print("\nCreating selective registration header", path)
             
-            with open(os.path.join(a.output_dir, "options.h"), "w") as f:
+            with open(os.path.join(a.output_dir, a.deploy_name + ".h"), "w") as f:
                 header_str = selective_registration_header_lib.get_header([path], 'rawproto', 'NoOp:NoOp,_Recv:RecvOp,_Send:SendOp')
                 f.write(header_str)
 
