@@ -37,8 +37,9 @@ parser.add_argument("--mode", required=True, choices=["train", "test", "export",
 parser.add_argument("--output_dir", required=True, help="where to put output files")
 parser.add_argument("--seed", type=int)
 parser.add_argument("--checkpoint", default=None, help="directory with checkpoint to resume training from or use for testing")
-parser.add_argument("--transform_ops", default="strip_unused_nodes,add_default_attributes,remove_nodes(op=Identity, op=CheckNumerics),\
-    fold_constants(ignore_errors=true),fold_batch_norms,fold_old_batch_norms,round_weights,sort_by_execution_order")
+parser.add_argument("--transform_ops", default="strip_unused_nodes,add_default_attributes, \
+    remove_nodes(op=Identity,op=CheckNumerics,op=HashTable,op=HashTableV2,op=MutableHashTable,op=MutableHashTableV2,op=MutableDenseHashTable,op=MutableDenseHashTableV2,op=MutableHashTableOfTensors,op=MutableHashTableOfTensorsV2,op=LookupTableImport,op=LookupTableImportV2,op=LookupTableExport,op=LookupTableExportV2,op=LookupTableSize,op=LookupTableSizeV2,op=LookupTableFind,op=LookupTableFindV2,op=InitializeTableFromTextFile,op=InitializeTableFromTextFileV2),\
+    fold_constants(ignore_errors=true),fold_batch_norms,fold_old_batch_norms,quantize_weights,sort_by_execution_order")
 parser.add_argument("--max_steps", type=int, help="number of training steps (0 to disable)")
 parser.add_argument("--max_epochs", type=int, help="number of training epochs")
 parser.add_argument("--summary_freq", type=int, default=100, help="update summaries every summary_freq steps")
@@ -299,7 +300,7 @@ def load_examples():
             raw_input_a = decode(a_contents)
             raw_input_a = tf.image.convert_image_dtype(raw_input_a, dtype=tf.float32)
 
-            assertion = tf.assert_equal(tf.shape(raw_input_a)[2], 3, message="image %s does not have 3 channels".format(a_path))
+            assertion = tf.assert_equal(tf.shape(raw_input_a)[2], 3, message="image {0} does not have 3 channels".format(a_path))
             with tf.control_dependencies([assertion]):
                 raw_input_a = tf.identity(raw_input_a)
 
@@ -310,7 +311,7 @@ def load_examples():
             raw_input_b = decode(b_contents)
             raw_input_b = tf.image.convert_image_dtype(raw_input_b, dtype=tf.float32)            
 
-            assertion = tf.assert_equal(tf.shape(raw_input_b)[2], 3, message="image %s does not have 3 channels".format(b_path))
+            assertion = tf.assert_equal(tf.shape(raw_input_b)[2], 3, message="image {0} does not have 3 channels".format(b_path))
             with tf.control_dependencies([assertion]):
                 raw_input_b = tf.identity(raw_input_b)
 
@@ -780,14 +781,10 @@ def main():
             print("\nDeploying model, has %d ops" % len(tf.get_default_graph().as_graph_def().node))
             output_graph_def = graph_util.convert_variables_to_constants(sess, tf.get_default_graph().as_graph_def(), [output_name])
 
-            print("\nStripping model, has %d ops" % len(output_graph_def.node))
             if not a.transform_ops is None:
+                print("\nStripping model and quantizing, has %d ops" % len(output_graph_def.node))
                 transforms = a.transform_ops.split(',')
                 output_graph_def = TransformGraph(output_graph_def, [input_name], [output_name], transforms)
-
-            print("\nRemoving training nodes, has %d ops" % len(output_graph_def.node))
-            output_graph_def = tf.graph_util.remove_training_nodes(output_graph_def, protected_nodes=None)
-
 
             #print("\n##### Optimizing model:") #issue: Didn't find expected Conv2D input to 'generator/encoder_2/batch_normalization/FusedBatchNorm'
             #output_graph_def = optimize_for_inference_lib.optimize_for_inference(output_graph_def, [input_name], [output_name], dtypes.float32.as_datatype_enum)
@@ -804,14 +801,21 @@ def main():
                 header_str = selective_registration_header_lib.get_header([path], 'rawproto', 'NoOp:NoOp,_Recv:RecvOp,_Send:SendOp')
                 f.write(header_str)
 
-            #$TF_ROOT/bazel-bin/tensorflow/contrib/util/convert_graphdef_memmapped_format --in_graph=$CB/CBAssets/nnets/output_graph.pb --out_graph=$CB/CBAssets/nnets/ade20k.pb
-
-            print("Finished: %d ops in the final graph." % len(output_graph_def.node))
-
             [print(n.name) for n in output_graph_def.node]
 
+            if os.environ.get('TF_ROOT') is not None:
+                mm_path = os.path.join(os.environ.get('TF_ROOT'),"bazel-bin/tensorflow/contrib/util/convert_graphdef_memmapped_format")
+                command = "{0} --in_graph='{1}' --out_graph='{1}'".format(mm_path, path)
+                print("\nMemmapping binary: ", command)
+                os.system(command)
+            else:
+                print(os.environ)
+                print("##############################################################\n") 
+                print("IMPORTANT: Be sure to run: bazel-bin/tensorflow/contrib/util/convert_graphdef_memmapped_format")
+            
+
+            print("Finished: %d ops in the final graph." % len(output_graph_def.node))
             print("##############################################################\n") 
-            print("IMPORTANT: Be sure to run: bazel-bin/tensorflow/contrib/util/convert_graphdef_memmapped_format")
 
         return
 
