@@ -56,7 +56,7 @@ def get_image_paths(path, expression=None, filtered_dirs=None):
 
     return file_names
 
-def getCombinedImage(a_path, b_path):
+def getCombinedImage(a_path, b_path, a_margin=(0,0,0,0), b_margin=(0,0,0,0)):
 
     a_image = misc.imread(a_path)
     if (len(a_image.shape)<3):
@@ -67,11 +67,26 @@ def getCombinedImage(a_path, b_path):
         b_image = cv2.cvtColor(b_image, cv2.COLOR_GRAY2RGB)
 
     ha,wa = a_image.shape[:2]
+    #crop
+    xa0 = a_margin[3]
+    ya0 = a_margin[0]
+    wa = wa - a_margin[1] - a_margin[3]
+    ha = ha - a_margin[0] - a_margin[2]
+
     hb,wb = b_image.shape[:2]
+    #crop
+    xb0 = b_margin[3]
+    yb0 = b_margin[0]
+    wb = wb - b_margin[1] - b_margin[3]
+    hb = hb - b_margin[0] - b_margin[2]
 
     if (ha != hb or wa != wb):
         print("A and B images must match but do not for ", a_path, b_path)
         return None
+
+    # image[y0:y0+height , x0:x0+width, :]
+    a_image = a_image[ya0:ya0+ha , xa0:xa0+wa, :]
+    b_image = b_image[yb0:yb0+hb , xb0:xb0+wb, :]    
 
     total_width = 2 * wa
     combined_img = np.zeros(shape=(ha, total_width, 3))

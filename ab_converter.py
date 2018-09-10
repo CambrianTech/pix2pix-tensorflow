@@ -37,12 +37,15 @@ import utils
 # --output_dir $datasets/ADE20K_indoor_AB/train
 
 # My notes:
-# Deploy::
-# python pix2pix.py --mode=deploy --output_dir=$CB/CBAssets/nnets --checkpoint=../../checkpoints/ade20k_train
-# Train:
+
+## Train:
 # python pix2pix.py --mode train --output_dir ade20k_train --max_epochs 2000 --input_dir ADE20KAB/train --which_direction AtoB --lr=0.0001 --batch_size=10
 # Download a lot of images:
 # googleimagesdownload --keywords "nose before and after" --size medium --limit 20000 --chromedriver="/usr/local/bin/chromedriver"
+
+# Deploy::
+# python pix2pix.py --mode=deploy --output_dir=$CB/CBAssets/nnets --checkpoint=../../checkpoints/ade20k_train --deploy_name=ade20k.pb
+# python pix2pix.py --mode=deploy --output_dir=$CB/CBAssets/nnets --checkpoint=../../checkpoints/normals_train_fast --deploy_name=normals.pb
 
 # export datasets=/datasets; \
 # python pix2pix.py --mode train \
@@ -55,8 +58,6 @@ import utils
 # --which_direction AtoB --no_flip \
 # --ngf=128 --ndf=128
 
-
-
 # export datasets=/datasets; \
 # python pix2pix.py --mode train \
 # --output_dir normals_train \
@@ -68,12 +69,20 @@ import utils
 # --which_direction AtoB \
 # --lr=0.0001 --batch_size=10
 
-export datasets=/datasets; \
-python pix2pix.py --mode train \
---output_dir nosejobs_train \
---max_epochs 2000 \
---input_dir $datasets/nosejobs \
---which_direction AtoB 
+# export datasets=/datasets; \
+# python pix2pix.py --mode train \
+# --output_dir nosejobs_train \
+# --max_epochs 2000 \
+# --input_dir $datasets/nosejobs \
+# --which_direction AtoB 
+
+# export datasets=/datasets; \
+# python ab_converter.py \
+# --input_dir $datasets/nyu_surface_normals \
+# --a_match_exp "*_color.png" \
+# --b_match_exp "*_norm_camera.png" \
+# --output_dir $datasets/nyu_surface_normals_AB \
+# --margin=45,40,10,40
 
 parser = argparse.ArgumentParser()
 
@@ -85,6 +94,8 @@ parser.add_argument("--b_input_dir", required=False, help="Target Input, image B
 parser.add_argument("--input_dir", required=False, help="Combined Source and Target Input Path")
 parser.add_argument("--a_match_exp", required=False, help="Source Input expression to match files")
 parser.add_argument("--b_match_exp", required=False, help="Source Input expression to match files")
+
+parser.add_argument("--margin", type=str, required=False, default="0,0,0,0", help="Crop margin as: top, right, bottom, left")
 
 parser.add_argument("--filter_categories", required=False, help="Path to file with valid categories")
 
@@ -104,11 +115,16 @@ def processFiles(a_names, b_names):
     if not os.path.exists(a.output_dir):
         os.makedirs(a.output_dir)
 
+    margins = a.margin.split(",")
+
+    a_margin=(int(margins[0]),int(margins[1]),int(margins[2]),int(margins[3]))
+    b_margin=a_margin
+
     for i in range(0, num_a):
         a_name = a_names[i]
         b_name = b_names[i]
 
-        combined_img = utils.getCombinedImage(a_name, b_name)
+        combined_img = utils.getCombinedImage(a_name, b_name, a_margin, b_margin)
 
         if not combined_img is None:
             combined_img_name = os.path.basename(a_name)
