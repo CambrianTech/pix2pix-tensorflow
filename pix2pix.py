@@ -284,6 +284,11 @@ def load_examples():
 
             raw_input.set_shape([None, None, 3])
 
+            # break apart image pair and move to range [-1, 1]
+            width = tf.shape(raw_input)[1] # [height, width, channels]
+            a_images = preprocess(raw_input[:,:width//2,:])
+            b_images = preprocess(raw_input[:,width//2:,:])
+
 # https://github.com/affinelayer/pix2pix-tensorflow/issues/49
 # I think you will want to comment out / skip the colour space code 
 # as that will not work with more than three channels.
