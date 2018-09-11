@@ -127,13 +127,16 @@ def replaceColor(im, red, green, blue, color_to_replace, replacement_color):
 def replaceColors(im):
 
     h,w = im.shape[:2]
-    # print(im[int(h/3),int(w/2)])
+    
+    # print(im[int(h-10),int(w-10)])
 
     red, green, blue = im[:,:,0], im[:,:,1], im[:,:,2]
 
     default = None
-    total_mask = np.ones([h,w],dtype=np.uint8)
+    total_mask = np.zeros([h,w],dtype=np.uint8)
 
+    num_elements = 0
+    lastZeroCount = 0
     for i in range(0, len(matches)):
         if matches[i] == "*":
             default = replacements[i]
@@ -143,9 +146,12 @@ def replaceColors(im):
                 mask = (red == color_to_replace[0]) & (green == color_to_replace[1])
                 im[:,:,:3][mask] = replacements[i] #codes for below
                 total_mask[mask] = 255
-
-    nzCount = cv2.countNonZero(total_mask)
-    if nzCount < 10:
+                nzCount = cv2.countNonZero(total_mask)
+                if nzCount > lastZeroCount:
+                    num_elements = num_elements + 1
+                lastZeroCount = nzCount
+    
+    if num_elements < 3:
         return None
 
     if not default is None:
