@@ -47,11 +47,11 @@ import ast
 # googleimagesdownload --keywords "nose before and after" --size medium --limit 20000 --chromedriver="/usr/local/bin/chromedriver"
 
 # Deploy:
-# python pix2pix.py --mode=deploy --output_dir=$CB/CBAssets/nnets --checkpoint=../../checkpoints/ade20k_train --deploy_name=ade20k.pb
-# python pix2pix.py --mode=deploy --output_dir=$CB/CBAssets/nnets --checkpoint=../../checkpoints/normals_train_fast --deploy_name=normals.pb
+# python pix2pix.py --mode=deploy --output_dir=$CB/CBAssets/nnets --checkpoint=$checkpoints/ade20k_train --deploy_name=ade20k.pb
+# python pix2pix.py --mode=deploy --output_dir=$CB/CBAssets/nnets --checkpoint=$checkpoints/normals_train_fast --deploy_name=normals.pb
 
 # Test:
-# python pix2pix.py --mode=export datasets=~/Development/datasets; python pix2pix.py --mode=test --checkpoint=../../checkpoints/normals_train_web --input_dir=$datasets/test_rooms --output_dir=$datasets/test_results 
+# python pix2pix.py --mode=export datasets=~/Development/datasets; python pix2pix.py --mode=test --checkpoint=$checkpoints/normals_train_web --input_dir=$datasets/test_rooms --output_dir=$datasets/test_results 
 
 # export datasets=/datasets; \
 # python pix2pix.py --mode train \
