@@ -7,3 +7,5 @@ models
 /facades_train
 .DS_Store
 *_train
+/mloutput
+/uploads
