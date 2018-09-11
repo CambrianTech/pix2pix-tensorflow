@@ -41,11 +41,16 @@ import utils
 ## Train:
 # python pix2pix.py --mode train --output_dir ade20k_train --max_epochs 2000 --input_dir ADE20KAB/train --which_direction AtoB --lr=0.0001 --batch_size=10
 # Download a lot of images:
+
+# Downloading lots of images:
 # googleimagesdownload --keywords "nose before and after" --size medium --limit 20000 --chromedriver="/usr/local/bin/chromedriver"
 
-# Deploy::
+# Deploy:
 # python pix2pix.py --mode=deploy --output_dir=$CB/CBAssets/nnets --checkpoint=../../checkpoints/ade20k_train --deploy_name=ade20k.pb
 # python pix2pix.py --mode=deploy --output_dir=$CB/CBAssets/nnets --checkpoint=../../checkpoints/normals_train_fast --deploy_name=normals.pb
+
+# Test:
+# export datasets=~/Development/datasets; python pix2pix.py --mode=test --checkpoint=../../checkpoints/normals_train_web --input_dir=$datasets/test_rooms --output_dir=$datasets/test_results 
 
 # export datasets=/datasets; \
 # python pix2pix.py --mode train \
@@ -83,6 +88,9 @@ import utils
 # --b_match_exp "*_norm_camera.png" \
 # --output_dir $datasets/nyu_surface_normals_AB \
 # --margin=45,40,10,40
+
+#   download lots of images:
+# googleimagesdownload room images
 
 parser = argparse.ArgumentParser()
 
@@ -136,7 +144,7 @@ def processFiles(a_names, b_names):
 
 def main():
 
-    a_names, b_names = utils.getABImagePaths(a)
+    a_names, b_names = utils.getABImagePaths(a, require_rgb=False)
 
     processFiles(a_names, b_names)  
     

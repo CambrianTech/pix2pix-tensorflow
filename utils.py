@@ -26,20 +26,19 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
-def is_valid_image(path):
+def is_valid_image(path, require_rgb=True):
     try:
         im=Image.open(path)
         im.verify()
-        return im.mode == "RGB"
+        return not require_rgb or im.mode == "RGB"
     except IOError:
         return False
     return False
 
-def get_image_paths(path, expression=None, filtered_dirs=None):
+def get_image_paths(path, expression=None, filtered_dirs=None, require_rgb=True):
     file_names=[]
 
     #print("Checking for images at ", path, expression)
-
     valid_image_dir = True
 
     if not filtered_dirs is None and not os.path.basename(path) in filtered_dirs:
@@ -48,8 +47,8 @@ def get_image_paths(path, expression=None, filtered_dirs=None):
     for file in os.listdir(path):
         file_path = os.path.join(path, file)
         if os.path.isdir(file_path):
-            file_names.extend(get_image_paths(file_path, expression, filtered_dirs))
-        elif valid_image_dir and is_valid_image(file_path) and (expression is None or fnmatch.fnmatch(file, expression)):
+            file_names.extend(get_image_paths(file_path, expression, filtered_dirs, require_rgb))
+        elif valid_image_dir and is_valid_image(file_path, require_rgb) and (expression is None or fnmatch.fnmatch(file, expression)):
             file_names.append(file_path)
 
     file_names.sort()
@@ -104,8 +103,9 @@ def hasParams(args, params):
             return False
     return True
 
-def getABImagePaths(args):
+def getABImagePaths(args, require_rgb=True):
     filtered_dirs = None
+
     if not args.filter_categories is None:
 
         if not os.path.isfile(args.filter_categories): 
@@ -141,8 +141,8 @@ def getABImagePaths(args):
             filtered_dirs.append(os.path.basename(args.a_input_dir))
             filtered_dirs.append(os.path.basename(args.b_input_dir))
 
-        a_names=get_image_paths(args.a_input_dir, args.a_match_exp, filtered_dirs=filtered_dirs)
-        b_names=get_image_paths(args.b_input_dir, args.b_match_exp, filtered_dirs=filtered_dirs)
+        a_names=get_image_paths(args.a_input_dir, args.a_match_exp, filtered_dirs=filtered_dirs, require_rgb=require_rgb)
+        b_names=get_image_paths(args.b_input_dir, args.b_match_exp, filtered_dirs=filtered_dirs, require_rgb=require_rgb)
     else:
 
         if not hasParams(args, ["a_match_exp", "b_match_exp"]):
@@ -155,8 +155,8 @@ def getABImagePaths(args):
         if not filtered_dirs is None:
             filtered_dirs.append(os.path.basename(args.input_dir))
 
-        a_names=get_image_paths(args.input_dir, args.a_match_exp, filtered_dirs=filtered_dirs)
-        b_names=get_image_paths(args.input_dir, args.b_match_exp, filtered_dirs=filtered_dirs)
+        a_names=get_image_paths(args.input_dir, args.a_match_exp, filtered_dirs=filtered_dirs, require_rgb=require_rgb)
+        b_names=get_image_paths(args.input_dir, args.b_match_exp, filtered_dirs=filtered_dirs, require_rgb=require_rgb)
 
     return a_names, b_names
 
