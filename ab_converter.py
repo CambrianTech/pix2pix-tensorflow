@@ -51,7 +51,7 @@ import ast
 # python pix2pix.py --mode=deploy --output_dir=$CB/CBAssets/nnets --checkpoint=../../checkpoints/normals_train_fast --deploy_name=normals.pb
 
 # Test:
-# export datasets=~/Development/datasets; python pix2pix.py --mode=test --checkpoint=../../checkpoints/normals_train_web --input_dir=$datasets/test_rooms --output_dir=$datasets/test_results 
+# python pix2pix.py --mode=export datasets=~/Development/datasets; python pix2pix.py --mode=test --checkpoint=../../checkpoints/normals_train_web --input_dir=$datasets/test_rooms --output_dir=$datasets/test_results 
 
 # export datasets=/datasets; \
 # python pix2pix.py --mode train \
@@ -93,6 +93,20 @@ import ast
 #   download lots of images:
 # googleimagesdownload room images
 
+# python ab_converter.py \
+# --input_dir $datasets/ADE20K_2016_07_26/images/training \
+# --filter_categories $datasets/ADE20K_2016_07_26/indoor-categories.txt \
+# --a_match_exp "ADE_*.jpg" --b_match_exp "ADE_*_seg.png" \
+# --output_dir $datasets/ADE20K_simplified_AB/train \
+# --replace_colors $datasets/ADE20K_2016_07_26/replace-colors.txt 
+
+# python ab_converter.py \
+# --input_dir $datasets/ADE20K_2016_07_26/images/training \
+# --filter_categories $datasets/ADE20K_2016_07_26/indoor-categories.txt \
+# --a_match_exp "ADE_*01638.jpg" --b_match_exp "ADE_*01638_seg.png" \
+# --output_dir $datasets/ADE20K_simplified_AB/train \
+# --replace_colors $datasets/ADE20K_2016_07_26/replace-colors.txt 
+
 parser = argparse.ArgumentParser()
 
 # required together:
@@ -118,17 +132,11 @@ a = parser.parse_args()
 matches = []
 replacements = []
 
-def replaceColor(im, red, green, blue, color_to_replace, replacement_color):
-    # im[np.where((im == color_to_replace).all(axis = 2))] = replacement_color
-    
-
-    return im
-
 def replaceColors(im):
 
     h,w = im.shape[:2]
     
-    # print(im[int(h-10),int(w-10)])
+    # print(im[16,100])
 
     red, green, blue = im[:,:,0], im[:,:,1], im[:,:,2]
 
