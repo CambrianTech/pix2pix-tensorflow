@@ -18,6 +18,7 @@ import fnmatch
 import cv2
 import re
 import utils
+import ast
 
 #example usage:
 # CamVid dataset:
@@ -106,11 +107,57 @@ parser.add_argument("--b_match_exp", required=False, help="Source Input expressi
 parser.add_argument("--margin", type=str, required=False, default="0,0,0,0", help="Crop margin as: top, right, bottom, left")
 
 parser.add_argument("--filter_categories", required=False, help="Path to file with valid categories")
+parser.add_argument("--replace_colors", required=False, help="Path to file with GT color replacements. See replace-colors.txt")
+
 
 # Place to output A/B images
 parser.add_argument("--output_dir", required=True, help="where to put output files")
 
 a = parser.parse_args()
+
+matches = []
+replacements = []
+
+def replaceColor(im, red, green, blue, color_to_replace, replacement_color):
+    # im[np.where((im == color_to_replace).all(axis = 2))] = replacement_color
+    
+
+    return im
+
+def replaceColors(im):
+
+    h,w = im.shape[:2]
+    # print(im[int(h/3),int(w/2)])
+
+    red, green, blue = im[:,:,0], im[:,:,1], im[:,:,2]
+
+    default = None
+    total_mask = np.ones([h,w],dtype=np.uint8)
+
+    for i in range(0, len(matches)):
+        if matches[i] == "*":
+            default = replacements[i]
+        else:
+            for j in range(0, len(matches[i])):
+                color_to_replace = matches[i][j]
+                mask = (red == color_to_replace[0]) & (green == color_to_replace[1])
+                im[:,:,:3][mask] = replacements[i] #codes for below
+                total_mask[mask] = 255
+
+    if not default is None:
+        im[total_mask != 255] = default
+    
+
+    return im
+
+def getColor(input): 
+    if not input.startswith('['):
+        input = '[' + input
+
+    if not input.endswith(']'):
+        input = input + ']'
+
+    return ast.literal_eval(input)
 
 def processFiles(a_names, b_names):
     num_a = len(a_names)
@@ -128,11 +175,40 @@ def processFiles(a_names, b_names):
     a_margin=(int(margins[0]),int(margins[1]),int(margins[2]),int(margins[3]))
     b_margin=a_margin
 
+    a_function = None
+    b_function = None
+
+    if not a.replace_colors is None:
+        if not os.path.isfile(a.replace_colors): 
+            print("Error: replace_colors file %s does not exist" % a.replace_colors)
+            return
+        b_function = replaceColors
+
+        with open(a.replace_colors) as f:
+            content = f.readlines()
+            content = [x.strip() for x in content] 
+
+        #/b/banquet_hall 38
+
+        for line in content:
+            line = re.sub(r'\s+', '', line) # Remove spaces
+            data_search = re.search('(.+):(.+)//', line, re.IGNORECASE)
+            if data_search:
+                if data_search.group(1).startswith('*'):
+                    to_replace = data_search.group(1)
+                else:
+                    to_replace = data_search.group(1).split('],[')
+                    to_replace = [getColor(x) for x in to_replace]
+                matches.append(to_replace)
+                replace_with = data_search.group(2)
+                replacements.append(ast.literal_eval(replace_with.strip()))
+
+
     for i in range(0, num_a):
         a_name = a_names[i]
         b_name = b_names[i]
 
-        combined_img = utils.getCombinedImage(a_name, b_name, a_margin, b_margin)
+        combined_img = utils.getCombinedImage(a_name, b_name, a_margin=a_margin, b_margin=b_margin, b_function=b_function)
 
         if not combined_img is None:
             combined_img_name = os.path.basename(a_name)

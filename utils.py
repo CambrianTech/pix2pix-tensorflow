@@ -55,7 +55,7 @@ def get_image_paths(path, expression=None, filtered_dirs=None, require_rgb=True)
 
     return file_names
 
-def getCombinedImage(a_path, b_path, a_margin=(0,0,0,0), b_margin=(0,0,0,0)):
+def getCombinedImage(a_path, b_path, a_margin=(0,0,0,0), b_margin=(0,0,0,0), a_function=None, b_function=None):
 
     a_image = misc.imread(a_path)
     if (len(a_image.shape)<3):
@@ -86,6 +86,12 @@ def getCombinedImage(a_path, b_path, a_margin=(0,0,0,0), b_margin=(0,0,0,0)):
     # image[y0:y0+height , x0:x0+width, :]
     a_image = a_image[ya0:ya0+ha , xa0:xa0+wa, :]
     b_image = b_image[yb0:yb0+hb , xb0:xb0+wb, :]    
+
+    if not a_function is None:
+        a_image = a_function(a_image)
+
+    if not b_function is None:
+        b_image = b_function(b_image)
 
     total_width = 2 * wa
     combined_img = np.zeros(shape=(ha, total_width, 3))
