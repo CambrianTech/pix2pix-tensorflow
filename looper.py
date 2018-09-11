@@ -250,66 +250,25 @@ def load_examples():
         decode = tf.image.decode_jpeg
     else:
         raise Exception("input_dir contains no image files")
-    
-    def get_name(path):
-        name, _ = os.path.splitext(os.path.basename(path))
-        return name
 
     with tf.name_scope("load_images"):
-        if len(combined_names) > 0:
-            path_queue = tf.train.string_input_producer(combined_names, shuffle=False)
-            reader = tf.WholeFileReader()
-            paths, contents = reader.read(path_queue)
-            raw_input = decode(contents)
-            raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
+        path_queue = tf.train.string_input_producer(combined_names, shuffle=False)
+        reader = tf.WholeFileReader()
+        paths, contents = reader.read(path_queue)
+        raw_input = decode(contents)
+        raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
 
-            assertion = tf.assert_equal(tf.shape(raw_input)[2], 3, message="image does not have 3 channels")
-            with tf.control_dependencies([assertion]):
-                raw_input = tf.identity(raw_input)
+        assertion = tf.assert_equal(tf.shape(raw_input)[2], 3, message="image does not have 3 channels")
+        with tf.control_dependencies([assertion]):
+            raw_input = tf.identity(raw_input)
 
-            raw_input.set_shape([None, None, 3])
+        raw_input.set_shape([None, None, 3])
 
-            # break apart image pair and move to range [-1, 1]
-            width = tf.shape(raw_input)[1] # [height, width, channels]
-            a_images = preprocess(raw_input[:,:width//2,:])
-            b_images = preprocess(raw_input[:,width//2:,:])
-
-# https://github.com/affinelayer/pix2pix-tensorflow/issues/49
-# I think you will want to comment out / skip the colour space code 
-# as that will not work with more than three channels.
-# I am not sure whether you meant that just conceptually. 
-# But just to clarify, inputs need to be a TensorFlow tensor. 
-# If input1 and input2 are both TensorFlow tensors then 
-# you will want to use tf.concat to combine them together.
-
-        else:
-            path_queue = tf.train.slice_input_producer([a_names, b_names], shuffle=False)
-            paths = path_queue
-
-            a_path = tf.decode_raw(path_queue[0], tf.uint8)
-            a_contents = tf.read_file(path_queue[0])
-            raw_input_a = decode(a_contents)
-            raw_input_a = tf.image.convert_image_dtype(raw_input_a, dtype=tf.float32)
-
-            assertion = tf.assert_equal(tf.shape(raw_input_a)[2], 3, message="image {0} does not have 3 channels".format(a_path))
-            with tf.control_dependencies([assertion]):
-                raw_input_a = tf.identity(raw_input_a)
-
-            raw_input_a.set_shape([None, None, 3])
-
-            b_path = tf.decode_raw(path_queue[1], tf.uint8)
-            b_contents = tf.read_file(path_queue[1])
-            raw_input_b = decode(b_contents)
-            raw_input_b = tf.image.convert_image_dtype(raw_input_b, dtype=tf.float32)            
-
-            assertion = tf.assert_equal(tf.shape(raw_input_b)[2], 3, message="image {0} does not have 3 channels".format(b_path))
-            with tf.control_dependencies([assertion]):
-                raw_input_b = tf.identity(raw_input_b)
-
-            raw_input_b.set_shape([None, None, 3])
-
-            a_images = preprocess(raw_input_a)
-            b_images = preprocess(raw_input_b)
+        # break apart image pair and move to range [-1, 1]
+        width = tf.shape(raw_input)[1] # [height, width, channels]
+        a_images = preprocess(raw_input[:,:width//2,:])
+        b_images = preprocess(raw_input[:,width//2:,:])
+            
     
 
     if a.which_direction == "AtoB":
