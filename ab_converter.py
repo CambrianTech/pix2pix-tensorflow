@@ -144,9 +144,12 @@ def replaceColors(im):
                 im[:,:,:3][mask] = replacements[i] #codes for below
                 total_mask[mask] = 255
 
+    nzCount = cv2.countNonZero(total_mask)
+    if nzCount < 10:
+        return None
+
     if not default is None:
         im[total_mask != 255] = default
-    
 
     return im
 

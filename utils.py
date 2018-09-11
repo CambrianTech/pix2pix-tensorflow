@@ -93,6 +93,9 @@ def getCombinedImage(a_path, b_path, a_margin=(0,0,0,0), b_margin=(0,0,0,0), a_f
     if not b_function is None:
         b_image = b_function(b_image)
 
+    if a_image is None or b_image is None:
+        return None
+
     total_width = 2 * wa
     combined_img = np.zeros(shape=(ha, total_width, 3))
 
