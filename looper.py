@@ -562,7 +562,7 @@ def main():
     with tf.variable_scope("generator"):
         batch_output = deprocess(create_generator(preprocess(batch_input), 3))
 
-    output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
+    output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8, saturate=True)[0]
     if a.output_filetype == "png":
         output_data = tf.image.encode_png(output_image)
     elif a.output_filetype == "jpeg":
@@ -573,6 +573,8 @@ def main():
     init_op = tf.global_variables_initializer()
     restore_saver = tf.train.Saver()
 
+    image_shape = (CROP_SIZE, CROP_SIZE, 3)
+
     with tf.Session() as sess:
         sess.run(init_op)
         print("loading model from checkpoint")
@@ -580,7 +582,11 @@ def main():
         restore_saver.restore(sess, checkpoint)
         print("LOOP")
         for i in range(3):
-            test = np.zeros(shape=(CROP_SIZE, CROP_SIZE, 3))
+            test = misc.imread("eclectic-living-room.jpg")
+            test = misc.imresize(test, image_shape)
+            test = test.astype('float32')
+            test = test / 255.0
+
             results = sess.run(output_data, feed_dict={input_image:test})
         
             with open("mloutput/test_" + str(i) + ".png", 'w') as fd:
