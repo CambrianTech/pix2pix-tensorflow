@@ -524,7 +524,6 @@ def append_index(filesets, step=False):
         index.write("</tr>")
     return index_path
 
-
 def main():
 
     print("Image flipping is turned", ('ON' if a.flip else 'OFF'))
@@ -577,20 +576,37 @@ def main():
 
     with tf.Session() as sess:
         sess.run(init_op)
-        print("loading model from checkpoint")
+        print("Loading model from checkpoint")
         checkpoint = tf.train.latest_checkpoint(a.checkpoint)
         restore_saver.restore(sess, checkpoint)
-        print("LOOP")
-        for i in range(3):
-            test = misc.imread("eclectic-living-room.jpg")
-            test = misc.imresize(test, image_shape)
-            test = test.astype('float32')
-            test = test / 255.0
+        print("Loaded model, waiting on images...")
 
-            results = sess.run(output_data, feed_dict={input_image:test})
-        
-            with open("mloutput/test_" + str(i) + ".png", 'w') as fd:
-                fd.write(results)
+        while True:
+
+            paths = utils.get_image_paths(a.input_dir, a.input_match_exp)
+
+            num_images = len(paths)
+            if num_images:
+                for i in range(num_images):
+                    path = paths[i]
+                    filename = os.path.splitext(os.path.basename(path))[0]
+                    print("Processing image " + filename)
+
+                    test = misc.imread(path)
+                    test = misc.imresize(test, image_shape)
+                    test = test.astype('float32') / 255.0
+
+                    results = sess.run(output_data, feed_dict={input_image:test})
+                    
+                    output_name = filename + "." + a.output_filetype
+
+                    with open("mloutput/" + output_name, 'w') as fd:
+                        fd.write(results)
+
+                    os.remove(path)
+                print("Waiting on images...")
+
+            time.sleep(0.25)
         
 
 
