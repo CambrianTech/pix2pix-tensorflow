@@ -73,9 +73,6 @@ parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN
 parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
 a = parser.parse_args()
 
-if a.scale_size == 0:
-    a.scale_size = a.crop_size
-
 Examples = collections.namedtuple("Examples", "paths, inputs, targets, count, steps_per_epoch")
 
 def check_image(image):
@@ -446,6 +443,9 @@ def pixelPerfect(fetches, src_contribution=0.5, dest_channel=2):
 
 
 def main():
+
+    if a.scale_size == 0:
+        a.scale_size = a.crop_size
 
     print("Image flipping is turned", ('ON' if a.flip else 'OFF'))
 
