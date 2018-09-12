@@ -26,6 +26,13 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
+def getSize(filename):
+    if os.path.isfile(filename): 
+        st = os.stat(filename)
+        return st.st_size
+    else:
+        return -1
+
 def is_valid_image(path, require_rgb=True):
     try:
         im=Image.open(path)

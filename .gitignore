@@ -9,3 +9,4 @@ models
 *_train
 /mloutput
 /uploads
+/checkpoints

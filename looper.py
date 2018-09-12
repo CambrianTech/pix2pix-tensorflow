@@ -583,17 +583,19 @@ def main():
 
         while True:
 
-            paths = utils.get_image_paths(a.input_dir, a.input_match_exp)
+            paths = utils.get_image_paths(a.input_dir, a.input_match_exp, require_rgb=False)
 
             num_images = len(paths)
             if num_images:
+                print("Processing %d images" % num_images)
                 for i in range(num_images):
                     path = paths[i]
                     filename = os.path.splitext(os.path.basename(path))[0]
                     print("Processing image " + filename)
 
-                    test = misc.imread(path)
+                    test = misc.imread(path, mode='RGB')
                     test = misc.imresize(test, image_shape)
+
                     test = test.astype('float32') / 255.0
 
                     results = sess.run(output_data, feed_dict={input_image:test})
