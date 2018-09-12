@@ -45,7 +45,7 @@ parser.add_argument("--batch_size", type=int, default=1, help="number of images 
 parser.add_argument("--which_direction", type=str, default="AtoB", choices=["AtoB", "BtoA"])
 parser.add_argument("--ngf", type=int, default=64, help="number of generator filters in first conv layer")
 parser.add_argument("--ndf", type=int, default=64, help="number of discriminator filters in first conv layer")
-parser.add_argument("--scale_size", type=int, default=286, help="scale images to this size before cropping to 256x256")
+parser.add_argument("--crop_size", type=int, default=256, help="crop images")
 parser.add_argument("--flip", dest="flip", action="store_true", help="flip images horizontally")
 parser.add_argument("--no_flip", dest="flip", action="store_false", help="don't flip images horizontally")
 parser.set_defaults(flip=True)
@@ -57,8 +57,6 @@ parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN
 # export options
 parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
 a = parser.parse_args()
-
-CROP_SIZE = 256
 
 def main():
 
@@ -85,13 +83,12 @@ def main():
                 print("loaded", key, "=", val)
                 setattr(a, key, val)
     # disable these features in test mode
-    a.scale_size = CROP_SIZE
     a.flip = False
 
     for k, v in a._get_kwargs():
         print(k, "=", v)
     
-    input_image = tf.placeholder(dtype=tf.float32, shape=[CROP_SIZE, CROP_SIZE, 3], name='input')
+    input_image = tf.placeholder(dtype=tf.float32, shape=[a.crop_size, a.crop_size, 3], name='input')
     batch_input = tf.expand_dims(input_image, axis=0)
 
     with tf.variable_scope("generator"):
@@ -108,7 +105,7 @@ def main():
     init_op = tf.global_variables_initializer()
     restore_saver = tf.train.Saver()
 
-    image_shape = (CROP_SIZE, CROP_SIZE, 3)
+    image_shape = (a.crop_size, a.crop_size, 3)
 
     with tf.Session() as sess:
         sess.run(init_op)
