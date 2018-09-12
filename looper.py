@@ -579,11 +579,12 @@ def main():
         checkpoint = tf.train.latest_checkpoint(a.checkpoint)
         restore_saver.restore(sess, checkpoint)
         print("LOOP")
-        test = np.zeros(shape=(CROP_SIZE, CROP_SIZE, 3))
-        results = sess.run(output_data, feed_dict={input_image:test})
+        for i in range(3):
+            test = np.zeros(shape=(CROP_SIZE, CROP_SIZE, 3))
+            results = sess.run(output_data, feed_dict={input_image:test})
         
-        with open("mloutput/test.png", 'w') as fd:
-            fd.write(results)
+            with open("mloutput/test_" + str(i) + ".png", 'w') as fd:
+                fd.write(results)
         
 
 
