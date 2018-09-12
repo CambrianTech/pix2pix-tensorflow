@@ -58,7 +58,6 @@ parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN
 parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
 a = parser.parse_args()
 
-EPS = 1e-12
 CROP_SIZE = 256
 
 def main():

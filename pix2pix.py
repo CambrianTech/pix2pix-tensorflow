@@ -22,6 +22,9 @@ import pix2pix_model
 from tensorflow.python.framework import graph_util,dtypes
 from tensorflow.python.tools import optimize_for_inference_lib, selective_registration_header_lib
 
+EPS = 1e-12
+CROP_SIZE = 512
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--a_input_dir", required=False, help="Source Input, image A, usually rgb camera data")
@@ -57,7 +60,7 @@ parser.add_argument("--batch_size", type=int, default=1, help="number of images 
 parser.add_argument("--which_direction", type=str, default="AtoB", choices=["AtoB", "BtoA"])
 parser.add_argument("--ngf", type=int, default=64, help="number of generator filters in first conv layer")
 parser.add_argument("--ndf", type=int, default=64, help="number of discriminator filters in first conv layer")
-parser.add_argument("--scale_size", type=int, default=286, help="scale images to this size before cropping to 256x256")
+parser.add_argument("--scale_size", type=int, default=0, help="scale images to this size before cropping to 256x256")
 parser.add_argument("--flip", dest="flip", action="store_true", help="flip images horizontally")
 parser.add_argument("--no_flip", dest="flip", action="store_false", help="don't flip images horizontally")
 parser.set_defaults(flip=True)
@@ -70,11 +73,10 @@ parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN
 parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
 a = parser.parse_args()
 
-EPS = 1e-12
-CROP_SIZE = 256
+if a.scale_size == 0:
+    a.scale_size = a.crop_size
 
 Examples = collections.namedtuple("Examples", "paths, inputs, targets, count, steps_per_epoch")
-Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_L1, gen_grads_and_vars, train")
 
 def check_image(image):
     assertion = tf.assert_equal(tf.shape(image)[-1], 3, message="image must have 3 color channels")
