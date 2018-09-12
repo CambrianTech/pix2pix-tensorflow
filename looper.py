@@ -15,7 +15,7 @@ import time
 import io
 from scipy import misc
 import cv2
-import model
+import pix2pix_model
 
 import utils
 
@@ -61,9 +61,6 @@ a = parser.parse_args()
 EPS = 1e-12
 CROP_SIZE = 256
 
-Examples = collections.namedtuple("Examples", "paths, inputs, targets, count, steps_per_epoch")
-Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_L1, gen_grads_and_vars, train")
-
 def main():
 
     print("Image flipping is turned", ('ON' if a.flip else 'OFF'))
@@ -99,7 +96,7 @@ def main():
     batch_input = tf.expand_dims(input_image, axis=0)
 
     with tf.variable_scope("generator"):
-        batch_output = model.deprocess(model.create_generator(a, model.preprocess(batch_input), 3))
+        batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(a, pix2pix_model.preprocess(batch_input), 3))
 
     output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8, saturate=True)[0]
     if a.output_filetype == "png":
