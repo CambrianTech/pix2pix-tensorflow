@@ -22,6 +22,9 @@ import utils
 from tensorflow.python.framework import graph_util,dtypes
 from tensorflow.python.tools import optimize_for_inference_lib, selective_registration_header_lib
 
+# python looper.py --checkpoint /Volumes/YUGE/checkpoints/normals_fake_web_60k \
+# --input_dir /Volumes/YUGE/datasets/ADE20K_2016_07_26/images/training --input_match_exp *.jpg
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--input_dir", required=False, default="uploads", help="Combined Source and Target Input Path")
@@ -53,6 +56,7 @@ parser.add_argument("--lr", type=float, default=0.0002, help="initial learning r
 parser.add_argument("--beta1", type=float, default=0.5, help="momentum term of adam")
 parser.add_argument("--l1_weight", type=float, default=100.0, help="weight on L1 term for generator gradient")
 parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN term for generator gradient")
+parser.add_argument("--delete_src", type=bool, default=False, help="delete source images")
 
 # export options
 parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
@@ -112,7 +116,7 @@ def main():
         print("Loading model from checkpoint")
         checkpoint = tf.train.latest_checkpoint(a.checkpoint)
         restore_saver.restore(sess, checkpoint)
-        print("Loaded model, waiting on images...")
+        print("Loaded model, waiting on images at %s ..." % a.input_dir)
 
         while True:
 
@@ -138,8 +142,15 @@ def main():
                     with open("mloutput/" + output_name, 'w') as fd:
                         fd.write(results)
 
-                    os.remove(path)
+                    if a.delete_src:
+                        os.remove(path)
                 print("Waiting on images...")
+            else:
+                print("none found, waiting")
+
+            if not a.delete_src:
+                print("DONE")
+                return
 
             time.sleep(0.25)
         
