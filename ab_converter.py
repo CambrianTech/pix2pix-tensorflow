@@ -123,6 +123,7 @@ parser.add_argument("--margin", type=str, required=False, default="0,0,0,0", hel
 parser.add_argument("--filter_categories", required=False, help="Path to file with valid categories")
 parser.add_argument("--replace_colors", required=False, help="Path to file with GT color replacements. See replace-colors.txt")
 
+parser.add_argument("--image_filter", required=False, help="Image filter to apply to two images")
 
 # Place to output A/B images
 parser.add_argument("--output_dir", required=True, help="where to put output files")
