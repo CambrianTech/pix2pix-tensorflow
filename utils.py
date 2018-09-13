@@ -119,16 +119,15 @@ def hasParams(args, params):
             return False
     return True
 
-def getABImagePaths(args, require_rgb=True):
+def getFilteredDirs(args):
+    
     filtered_dirs = None
 
     if not args.filter_categories is None:
-
-        if not os.path.isfile(args.filter_categories): 
-            print("Error: filter_categories file %s does not exist" % args.filter_categories)
-            return [], []
-
         filtered_dirs = []
+        if not os.path.isfile(args.filter_categories): 
+                print("Error: filter_categories file %s does not exist" % args.filter_categories)
+                return [], []
 
         with open(args.filter_categories) as f:
             content = f.readlines()
@@ -140,6 +139,11 @@ def getABImagePaths(args, require_rgb=True):
             if category_search:
                 category = category_search.group(1)
                 filtered_dirs.append(category)
+
+    return filtered_dirs
+
+def getABImagePaths(args, require_rgb=True):
+    filtered_dirs = getFilteredDirs(args)
 
     if not args.a_input_dir is None:
         if not hasParams(args, ["a_input_dir", "b_input_dir"]):

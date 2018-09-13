@@ -29,6 +29,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument("--input_dir", required=False, default="uploads", help="Combined Source and Target Input Path")
 parser.add_argument("--input_match_exp", required=False, help="Input Match Expression")
+parser.add_argument("--filter_categories", required=False, help="Path to file with valid categories")
 
 parser.add_argument("--output_dir", default="mloutput", required=False, help="where to put output files")
 parser.add_argument("--seed", type=int)
@@ -120,7 +121,8 @@ def main():
 
         while True:
 
-            paths = utils.get_image_paths(a.input_dir, a.input_match_exp, require_rgb=False)
+            filtered_dirs = utils.getFilteredDirs(a)
+            paths = utils.get_image_paths(a.input_dir, a.input_match_exp, require_rgb=False, filtered_dirs=filtered_dirs)
 
             num_images = len(paths)
             if num_images:
@@ -128,7 +130,9 @@ def main():
                 for i in range(num_images):
                     path = paths[i]
                     filename = os.path.splitext(os.path.basename(path))[0]
-                    print("Processing image " + filename)
+
+                    percent_complete = float(100 * i) / float(num_images)
+                    print("(%.2f%%) Processing image %s" % (percent_complete, filename))
 
                     test = misc.imread(path, mode='RGB')
                     test = misc.imresize(test, image_shape)
