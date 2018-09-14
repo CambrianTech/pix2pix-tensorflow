@@ -37,6 +37,7 @@ def is_valid_image(path, require_rgb=True):
     try:
         im=Image.open(path)
         im.verify()
+        print("Mode is " + im.mode)
         return not require_rgb or im.mode == "RGB"
     except IOError:
         print("IOError with image " + path)
@@ -46,7 +47,7 @@ def is_valid_image(path, require_rgb=True):
 def get_image_paths(path, expression=None, filtered_dirs=None, require_rgb=True):
     file_names=[]
 
-    print("Checking for images at ", path, expression)
+    # print("Checking for images at ", path, expression)
 
     valid_image_dir = True
 
@@ -55,7 +56,7 @@ def get_image_paths(path, expression=None, filtered_dirs=None, require_rgb=True)
 
     paths = os.listdir(path)
 
-    print("Got %d candidates" % len(paths))
+    # print("Got %d candidates" % len(paths))
 
     for file in paths:
         file_path = os.path.join(path, file)
