@@ -181,6 +181,7 @@ def getABImagePaths(args, require_rgb=True):
         if not filtered_dirs is None:
             filtered_dirs.append(os.path.basename(args.input_dir))
 
+        print("get_image_paths, a,b")
         a_names=get_image_paths(args.input_dir, args.a_match_exp, filtered_dirs=filtered_dirs, require_rgb=require_rgb)
         b_names=get_image_paths(args.input_dir, args.b_match_exp, filtered_dirs=filtered_dirs, require_rgb=require_rgb)
 
