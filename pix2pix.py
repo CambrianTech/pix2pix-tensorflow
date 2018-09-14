@@ -181,7 +181,10 @@ def read_images_from_disk(input_queue):
     """
     label = input_queue[1]
     file_contents = tf.read_file(input_queue[0])
-    example = tf.image.decode_png(file_contents, channels=3)
+    example = tf.image.decode_png(file_contents)
+    # remove alpha channel if present
+    example = tf.cond(tf.equal(tf.shape(example)[2], 4), lambda: example[:,:,:3], lambda: example)
+
     return example, label
 
 def load_examples():
