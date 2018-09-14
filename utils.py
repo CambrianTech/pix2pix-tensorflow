@@ -37,8 +37,7 @@ def is_valid_image(path, require_rgb=True):
     try:
         im=Image.open(path)
         im.verify()
-        print("Mode is " + im.mode + " Requires RGB?" + str(require_rgb))
-        return not require_rgb or im.mode == "RGB"
+        return not require_rgb or im.mode == "RGB" or im.mode == "RGBA"
     except IOError:
         print("IOError with image " + path)
         return False
