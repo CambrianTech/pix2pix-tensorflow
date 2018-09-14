@@ -37,6 +37,13 @@ import ast
 # --b_match_exp "ADE_*_seg.png" \
 # --output_dir $datasets/ADE20K_indoor_AB/train
 
+# python ab_converter.py \
+# --a_input_dir $datasets/adenormals \
+# --b_input_dir $datasets/ADE20K_indoor_256 \
+# --a_match_exp "ADE_*.png" \
+# --b_match_exp "ADE_*.png" \
+# --output_dir $datasets/adenormals_indoor_AB/train
+
 # My notes:
 
 ## Train:
@@ -106,6 +113,18 @@ import ast
 # --a_match_exp "ADE_*01638.jpg" --b_match_exp "ADE_*01638_seg.png" \
 # --output_dir $datasets/ADE20K_simplified_AB/train \
 # --replace_colors $datasets/ADE20K_2016_07_26/replace-colors.txt 
+
+# python ab_converter.py \
+# --a_input_dir $datasets/adenormals \
+# --b_input_dir mloutput \
+# --a_match_exp "ADE_*.png" --b_match_exp "ADE_*.png" \
+# --output_dir $datasets/adenormals_simplified_AB/train \
+# --replace_colors $datasets/ADE20K_2016_07_26/replace-colors.txt 
+
+# python pix2pix.py --mode train --output_dir normals512 \
+# --a_input_dir ../datasets/mlt_v2 --a_match_exp '*.png' \
+# --b_input_dir ../datasets/normal_v2 --b_match_exp '*_norm_camera.png' \
+# --which_direction AtoB --no_flip --ndf 128 --ngf 128 --crop_size 512 --max_epochs 2000
 
 parser = argparse.ArgumentParser()
 

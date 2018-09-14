@@ -39,6 +39,7 @@ def is_valid_image(path, require_rgb=True):
         im.verify()
         return not require_rgb or im.mode == "RGB"
     except IOError:
+        print("IOError with image " + path)
         return False
     return False
 
@@ -62,15 +63,20 @@ def get_image_paths(path, expression=None, filtered_dirs=None, require_rgb=True)
 
     return file_names
 
+def getRGBImage(img):
+    if (len(img.shape)<3):
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+    elif img.shape[2] == 4:
+        img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
+    return img
+
 def getCombinedImage(a_path, b_path, a_margin=(0,0,0,0), b_margin=(0,0,0,0), a_function=None, b_function=None):
 
     a_image = misc.imread(a_path)
-    if (len(a_image.shape)<3):
-        a_image = cv2.cvtColor(a_image, cv2.COLOR_GRAY2RGB)
+    a_image = getRGBImage(a_image)
 
     b_image = misc.imread(b_path)
-    if (len(b_image.shape)<3):
-        b_image = cv2.cvtColor(b_image, cv2.COLOR_GRAY2RGB)
+    b_image = getRGBImage(b_image)
 
     ha,wa = a_image.shape[:2]
     #crop

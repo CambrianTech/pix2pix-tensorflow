@@ -58,6 +58,7 @@ parser.add_argument("--beta1", type=float, default=0.5, help="momentum term of a
 parser.add_argument("--l1_weight", type=float, default=100.0, help="weight on L1 term for generator gradient")
 parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN term for generator gradient")
 parser.add_argument("--delete_src", type=bool, default=False, help="delete source images")
+parser.add_argument("--run_nnet", type=utils.str2bool, nargs='?', const=True, default=True, help="Run nnet, otherwise just a filter/resize operation of images")
 
 # export options
 parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
@@ -130,21 +131,22 @@ def main():
                 for i in range(num_images):
                     path = paths[i]
                     filename = os.path.splitext(os.path.basename(path))[0]
+                    output_name = filename + "." + a.output_filetype
+                    output_path = a.output_dir + "/" + output_name
 
                     percent_complete = float(100 * i) / float(num_images)
                     print("(%.2f%%) Processing image %s" % (percent_complete, filename))
 
-                    test = misc.imread(path, mode='RGB')
-                    test = misc.imresize(test, image_shape)
+                    img = misc.imread(path, mode='RGB')
+                    img = misc.imresize(img, image_shape)
 
-                    test = test.astype('float32') / 255.0
-
-                    results = sess.run(output_data, feed_dict={input_image:test})
-                    
-                    output_name = filename + "." + a.output_filetype
-
-                    with open("mloutput/" + output_name, 'w') as fd:
-                        fd.write(results)
+                    if not a.run_nnet:
+                        misc.imsave(output_path, img)
+                    else:
+                        img = img.astype('float32') / 255.0
+                        results = sess.run(output_data, feed_dict={input_image:img})
+                        with open(output_path, 'w') as fd:
+                            fd.write(results)
 
                     if a.delete_src:
                         os.remove(path)
