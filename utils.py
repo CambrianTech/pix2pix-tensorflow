@@ -46,13 +46,18 @@ def is_valid_image(path, require_rgb=True):
 def get_image_paths(path, expression=None, filtered_dirs=None, require_rgb=True):
     file_names=[]
 
-    #print("Checking for images at ", path, expression)
+    print("Checking for images at ", path, expression)
+
     valid_image_dir = True
 
     if not filtered_dirs is None and not os.path.basename(path) in filtered_dirs:
         valid_image_dir = False
 
-    for file in os.listdir(path):
+    paths = os.listdir(path)
+
+    print("Got %d candidates" % len(paths))
+
+    for file in paths:
         file_path = os.path.join(path, file)
         if os.path.isdir(file_path):
             file_names.extend(get_image_paths(file_path, expression, filtered_dirs, require_rgb))
@@ -181,7 +186,6 @@ def getABImagePaths(args, require_rgb=True):
         if not filtered_dirs is None:
             filtered_dirs.append(os.path.basename(args.input_dir))
 
-        print("get_image_paths, a,b")
         a_names=get_image_paths(args.input_dir, args.a_match_exp, filtered_dirs=filtered_dirs, require_rgb=require_rgb)
         b_names=get_image_paths(args.input_dir, args.b_match_exp, filtered_dirs=filtered_dirs, require_rgb=require_rgb)
 
