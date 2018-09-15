@@ -17,6 +17,7 @@ from scipy import misc
 import fnmatch
 import cv2
 import re
+import imghdr
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -35,6 +36,10 @@ def getSize(filename):
 
 def is_valid_image(path, require_rgb=True):
     try:
+        what = imghdr.what(path)
+        if (what != "jpeg" and what != "png"):
+            return False
+
         im=Image.open(path)
         im.verify()
         return not require_rgb or im.mode == "RGB"

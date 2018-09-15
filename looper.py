@@ -57,7 +57,7 @@ parser.add_argument("--lr", type=float, default=0.0002, help="initial learning r
 parser.add_argument("--beta1", type=float, default=0.5, help="momentum term of adam")
 parser.add_argument("--l1_weight", type=float, default=100.0, help="weight on L1 term for generator gradient")
 parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN term for generator gradient")
-parser.add_argument("--delete_src", type=bool, default=False, help="delete source images")
+parser.add_argument("--delete_src", type=utils.str2bool, nargs='?', const=True, default=False, help="delete source images")
 parser.add_argument("--run_nnet", type=utils.str2bool, nargs='?', const=True, default=True, help="Run nnet, otherwise just a filter/resize operation of images")
 
 # export options
@@ -126,6 +126,7 @@ def main():
             paths = utils.get_image_paths(a.input_dir, a.input_match_exp, require_rgb=False, filtered_dirs=filtered_dirs)
 
             num_images = len(paths)
+
             if num_images:
                 print("Processing %d images" % num_images)
                 for i in range(num_images):
@@ -151,8 +152,6 @@ def main():
                     if a.delete_src:
                         os.remove(path)
                 print("Waiting on images...")
-            else:
-                print("none found, waiting")
 
             if not a.delete_src:
                 print("DONE")
