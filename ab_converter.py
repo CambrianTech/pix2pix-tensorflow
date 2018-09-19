@@ -126,6 +126,11 @@ import ast
 # --b_input_dir ../datasets/normal_v2 --b_match_exp '*_norm_camera.png' \
 # --which_direction AtoB --no_flip --ndf 128 --ngf 128 --crop_size 512 --max_epochs 2000
 
+# python ab_converter.py \
+# --input_dir $datasets/shadows256 \
+# --a_match_exp "*_C.png" --b_match_exp "*_L.png" \
+# --output_dir $datasets/shadows_ab 
+
 parser = argparse.ArgumentParser()
 
 # required together:
