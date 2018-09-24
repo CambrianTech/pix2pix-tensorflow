@@ -493,10 +493,10 @@ def main():
 
         # output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
         # output_image = tf.identity(output_image, name='output')
-        output_image = tf.identity(batch_output[0], name='output')
+        # output_image = tf.identity(batch_output[0], name='output')
 
-        input_name = input_image.name.split(':')[0]
-        output_name = output_image.name.split(':')[0]
+        input_name = batch_input.name.split(':')[0]
+        output_name = batch_output.name.split(':')[0]
 
          #[print(n.name) for n in tf.get_default_graph().as_graph_def().node]
         print("##############################################################\n")
@@ -517,8 +517,8 @@ def main():
             restore_saver.restore(sess, checkpoint)
             
             # Save the model
-            inputs = {'input': input_image}
-            outputs = {'output': output_image}
+            inputs = {'input': batch_input}
+            outputs = {'output': batch_output}
 
             shutil.rmtree(a.output_dir)
             tf.saved_model.simple_save(sess, a.output_dir, inputs, outputs)
