@@ -16,6 +16,7 @@ import io
 from scipy import misc
 import cv2
 
+import shutil
 import utils
 import pix2pix_model
 
@@ -483,45 +484,25 @@ def main():
 
     if a.mode == "export":
         # export the generator to a meta graph that can be imported later for standalone generation
-        if a.lab_colorization:
-            raise Exception("export not supported for lab_colorization")
-
-        input = tf.placeholder(tf.string, shape=[1])
-        input_data = tf.decode_base64(input[0])
-        input_image = tf.image.decode_png(input_data)
-
-        # remove alpha channel if present
-        input_image = tf.cond(tf.equal(tf.shape(input_image)[2], 4), lambda: input_image[:,:,:3], lambda: input_image)
-        # convert grayscale to RGB
-        input_image = tf.cond(tf.equal(tf.shape(input_image)[2], 1), lambda: tf.image.grayscale_to_rgb(input_image), lambda: input_image)
-
-        input_image = tf.image.convert_image_dtype(input_image, dtype=tf.float32)
-        input_image.set_shape([a.crop_size, a.crop_size, 3])
+        shape = [a.crop_size, a.crop_size, 3]
+        input_image = tf.placeholder(dtype=tf.float32, shape=shape, name='input')
         batch_input = tf.expand_dims(input_image, axis=0)
 
         with tf.variable_scope("generator"):
             batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(a, pix2pix_model.preprocess(batch_input), 3))
 
-        output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
-        if a.output_filetype == "png":
-            output_data = tf.image.encode_png(output_image)
-        elif a.output_filetype == "jpeg":
-            output_data = tf.image.encode_jpeg(output_image, quality=80)
-        else:
-            raise Exception("invalid filetype")
-        output = tf.convert_to_tensor([tf.encode_base64(output_data)])
+        # output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
+        # output_image = tf.identity(output_image, name='output')
+        output_image = tf.identity(batch_output[0], name='output')
 
-        key = tf.placeholder(tf.string, shape=[1])
-        inputs = {
-            "key": key.name,
-            "input": input.name
-        }
-        tf.add_to_collection("inputs", json.dumps(inputs))
-        outputs = {
-            "key":  tf.identity(key).name,
-            "output": output.name,
-        }
-        tf.add_to_collection("outputs", json.dumps(outputs))
+        input_name = input_image.name.split(':')[0]
+        output_name = output_image.name.split(':')[0]
+
+         #[print(n.name) for n in tf.get_default_graph().as_graph_def().node]
+        print("##############################################################\n")
+        print("Input Name:", input_name)
+        print("Output Name:", output_name)
+        print("##############################################################\n")
 
         init_op = tf.global_variables_initializer()
         restore_saver = tf.train.Saver()
@@ -529,12 +510,23 @@ def main():
 
         with tf.Session() as sess:
             sess.run(init_op)
-            print("loading model from checkpoint")
+
+            print("##############################################################\n")
+            print("\nLoading model from checkpoint")
             checkpoint = tf.train.latest_checkpoint(a.checkpoint)
             restore_saver.restore(sess, checkpoint)
-            print("exporting model")
-            export_saver.export_meta_graph(filename=os.path.join(a.output_dir, "export.meta"))
-            export_saver.save(sess, os.path.join(a.output_dir, "export"), write_meta_graph=False)
+            
+            # Save the model
+            inputs = {'input': input_image}
+            outputs = {'output': output_image}
+
+            shutil.rmtree(a.output_dir)
+            tf.saved_model.simple_save(sess, a.output_dir, inputs, outputs)
+
+            print("Finished: %d ops in the final graph." % len(tf.get_default_graph().as_graph_def().node))
+            print("##############################################################\n") 
+
+        return
 
         return
 
