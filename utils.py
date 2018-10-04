@@ -36,6 +36,7 @@ def getSize(filename):
 
 def is_valid_image(path, require_rgb=True):
     try:
+        return True
         what = imghdr.what(path)
         if (what != "jpeg" and what != "png"):
             return False
