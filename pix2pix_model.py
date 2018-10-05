@@ -26,7 +26,7 @@ def get_gradient_penalty(args, inputs, real, fake):
     x = interpolate(real, fake)
     pred = create_discriminator(args, inputs, x)
     gradients = tf.gradients(pred, x)[0]
-    slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=list(range(1, x.shape.ndims))))
+    slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[-1]))
     gp = tf.reduce_mean((slopes - 1.)**2)
     return gp
 
