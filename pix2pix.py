@@ -666,6 +666,9 @@ def main():
     tf.summary.scalar("generator_loss_GAN", model.gen_loss_GAN)
     tf.summary.scalar("generator_loss_L1", model.gen_loss_L1)
 
+    if a.gan_loss == "wgan":
+        tf.summary.scalar("wgan_d_minus_g", model.discrim_loss - model.gen_loss_GAN)
+
     if model.gradient_penalty is not None:
         tf.summary.scalar("gradient_penalty", model.gradient_penalty)
 
