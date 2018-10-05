@@ -80,7 +80,7 @@ def create_model(args, inputs, targets, EPS):
 
     with tf.name_scope("discriminator_train"):
         discrim_tvars = [var for var in tf.trainable_variables() if var.name.startswith("discriminator")]
-        discrim_optim = tf.train.AdamOptimizer(args.lr, args.beta1)
+        discrim_optim = tf.train.AdamOptimizer(args.lr, args.beta1, args.beta2)
 
         discrim_total_loss = discrim_loss
         if gradient_penalty is not None:
@@ -92,7 +92,7 @@ def create_model(args, inputs, targets, EPS):
     with tf.name_scope("generator_train"):
         with tf.control_dependencies([discrim_train]):
             gen_tvars = [var for var in tf.trainable_variables() if var.name.startswith("generator")]
-            gen_optim = tf.train.AdamOptimizer(args.lr, args.beta1)
+            gen_optim = tf.train.AdamOptimizer(args.lr, args.beta1, args.beta2)
             gen_grads_and_vars = gen_optim.compute_gradients(gen_loss, var_list=gen_tvars)
             gen_train = gen_optim.apply_gradients(gen_grads_and_vars)
 
