@@ -13,7 +13,22 @@ import io
 from scipy import misc
 import cv2
 
-Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_L1, gen_grads_and_vars, train")
+Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_L1, gen_grads_and_vars, train, gradient_penalty")
+
+def get_gradient_penalty(args, inputs, real, fake):
+    def interpolate(a, b):
+        shape = tf.concat((tf.shape(a)[0:1], tf.tile([1], [a.shape.ndims - 1])), axis=0)
+        alpha = tf.random_uniform(shape=shape, minval=0., maxval=1.)
+        inter = a + alpha * (b - a)
+        inter.set_shape(a.get_shape().as_list())
+        return inter
+
+    x = interpolate(real, fake)
+    pred = create_discriminator(args, inputs, x)
+    gradients = tf.gradients(pred, x)[0]
+    slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=list(range(1, x.shape.ndims))))
+    gp = tf.reduce_mean((slopes - 1.)**2)
+    return gp
 
 def create_model(args, inputs, targets, EPS):
     
@@ -37,19 +52,41 @@ def create_model(args, inputs, targets, EPS):
         # minimizing -tf.log will try to get inputs to 1
         # predict_real => 1
         # predict_fake => 0
-        discrim_loss = tf.reduce_mean(-(tf.log(predict_real + EPS) + tf.log(1 - predict_fake + EPS)))
+        if args.gan_loss == "gan":
+            discrim_loss = tf.reduce_mean(-(tf.log(predict_real + EPS) + tf.log(1 - predict_fake + EPS)))
+        elif args.gan_loss == "wgan":
+            discrim_loss = tf.reduce_mean(predict_fake - predict_real)
+        else:
+            raise Exception("Unknown gan_loss:", args.gan_loss)
 
     with tf.name_scope("generator_loss"):
         # predict_fake => 1
         # abs(targets - outputs) => 0
-        gen_loss_GAN = tf.reduce_mean(-tf.log(predict_fake + EPS))
+        if args.gan_loss == "gan":
+            gen_loss_GAN = tf.reduce_mean(-tf.log(predict_fake + EPS))
+        elif args.gan_loss == "wgan":
+            gen_loss_GAN = tf.reduce_mean(-predict_fake)
+        else:
+            raise Exception("Unknown gan_loss:", args.gan_loss)
+
         gen_loss_L1 = tf.reduce_mean(tf.abs(targets - outputs))
         gen_loss = gen_loss_GAN * args.gan_weight + gen_loss_L1 * args.l1_weight
+
+    with tf.name_scope("gradient_penalty"):
+        if args.gp_weight is not None and args.gp_weight > 0:
+            gradient_penalty = args.gp_weight * get_gradient_penalty(args, inputs, targets, outputs)
+        else:
+            gradient_penalty = None
 
     with tf.name_scope("discriminator_train"):
         discrim_tvars = [var for var in tf.trainable_variables() if var.name.startswith("discriminator")]
         discrim_optim = tf.train.AdamOptimizer(args.lr, args.beta1)
-        discrim_grads_and_vars = discrim_optim.compute_gradients(discrim_loss, var_list=discrim_tvars)
+
+        discrim_total_loss = discrim_loss
+        if gradient_penalty is not None:
+            discrim_total_loss += gradient_penalty
+
+        discrim_grads_and_vars = discrim_optim.compute_gradients(discrim_total_loss, var_list=discrim_tvars)
         discrim_train = discrim_optim.apply_gradients(discrim_grads_and_vars)
 
     with tf.name_scope("generator_train"):
@@ -75,6 +112,7 @@ def create_model(args, inputs, targets, EPS):
         gen_grads_and_vars=gen_grads_and_vars,
         outputs=outputs,
         train=tf.group(update_losses, incr_global_step, gen_train),
+        gradient_penalty=gradient_penalty,
     )
 
 def preprocess(image):
@@ -222,7 +260,14 @@ def create_discriminator(args, discrim_inputs, discrim_targets):
     # layer_5: [batch, 31, 31, ndf * 8] => [batch, 30, 30, 1]
     with tf.variable_scope("layer_%d" % (len(layers) + 1)):
         convolved = discrim_conv(rectified, out_channels=1, stride=1)
-        output = tf.sigmoid(convolved)
+
+        # Only use sigmoid for normal GAN.
+        # WGAN requires a full linear output.
+        if args.gan_loss == "gan":
+            output = tf.sigmoid(convolved)
+        else:
+            output = convolved
+
         layers.append(output)
 
     return layers[-1]

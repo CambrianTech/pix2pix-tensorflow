@@ -69,6 +69,8 @@ parser.add_argument("--lr", type=float, default=0.0002, help="initial learning r
 parser.add_argument("--beta1", type=float, default=0.5, help="momentum term of adam")
 parser.add_argument("--l1_weight", type=float, default=100.0, help="weight on L1 term for generator gradient")
 parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN term for generator gradient")
+parser.add_argument("--gan_loss", type=str, default="gan", choices=["gan", "wgan"], help="loss to use for the GAN")
+parser.add_argument("--gp_weight", type=float, default=0, help="weight on gradient penalty term")
 
 # export options
 parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
@@ -663,6 +665,9 @@ def main():
     tf.summary.scalar("discriminator_loss", model.discrim_loss)
     tf.summary.scalar("generator_loss_GAN", model.gen_loss_GAN)
     tf.summary.scalar("generator_loss_L1", model.gen_loss_L1)
+
+    if model.gradient_penalty is not None:
+        tf.summary.scalar("gradient_penalty", model.gradient_penalty)
 
     for var in tf.trainable_variables():
         tf.summary.histogram(var.op.name + "/values", var)
