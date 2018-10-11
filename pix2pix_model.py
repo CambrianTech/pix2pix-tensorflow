@@ -13,7 +13,20 @@ import io
 from scipy import misc
 import cv2
 
-Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_L1, gen_grads_and_vars, train")
+Model = collections.namedtuple("Model", "outputs, predict_real, predict_fake, discrim_loss, discrim_grads_and_vars, gen_loss_GAN, gen_loss_L1, gen_grads_and_vars, train, gradient_penalty")
+
+def random_interpolate(a, b):
+    shape = tf.concat((tf.shape(a)[0:1], tf.tile([1], [a.shape.ndims - 1])), axis=0)
+    alpha = tf.random_uniform(shape=shape, minval=0., maxval=1.)
+    inter = a + alpha * (b - a)
+    inter.set_shape(a.get_shape().as_list())
+    return inter
+
+def get_gradient_penalty(args, pred, x):
+    gradients = tf.gradients(pred, x)[0]
+    slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[-1]))
+    gp = tf.reduce_mean((slopes - 1.)**2)
+    return gp
 
 def create_model(args, inputs, targets, EPS):
     
@@ -37,30 +50,53 @@ def create_model(args, inputs, targets, EPS):
         # minimizing -tf.log will try to get inputs to 1
         # predict_real => 1
         # predict_fake => 0
-        discrim_loss = tf.reduce_mean(-(tf.log(predict_real + EPS) + tf.log(1 - predict_fake + EPS)))
+        if args.gan_loss == "gan":
+            discrim_loss = tf.reduce_mean(-(tf.log(predict_real + EPS) + tf.log(1 - predict_fake + EPS)))
+        elif args.gan_loss == "wgan":
+            discrim_loss = tf.reduce_mean(predict_fake - predict_real)
+        else:
+            raise Exception("Unknown gan_loss:", args.gan_loss)
 
     with tf.name_scope("generator_loss"):
         # predict_fake => 1
         # abs(targets - outputs) => 0
-        gen_loss_GAN = tf.reduce_mean(-tf.log(predict_fake + EPS))
+        if args.gan_loss == "gan":
+            gen_loss_GAN = tf.reduce_mean(-tf.log(predict_fake + EPS))
+        elif args.gan_loss == "wgan":
+            gen_loss_GAN = tf.reduce_mean(-predict_fake)
+        else:
+            raise Exception("Unknown gan_loss:", args.gan_loss)
+
         gen_loss_L1 = tf.reduce_mean(tf.abs(targets - outputs))
         gen_loss = gen_loss_GAN * args.gan_weight + gen_loss_L1 * args.l1_weight
 
+    # Gradient penalty
+    if args.gp_weight is not None and args.gp_weight > 0:
+        with tf.name_scope("gradient_penalty"):
+            rand_interp = random_interpolate(targets, outputs)
+            with tf.variable_scope("discriminator", reuse=True):
+                predict_rand_interp = create_discriminator(args, inputs, rand_interp)
+            gradient_penalty = args.gp_weight * get_gradient_penalty(args, predict_rand_interp, rand_interp)
+    else:
+        gradient_penalty = None
+
     with tf.name_scope("discriminator_train"):
         discrim_tvars = [var for var in tf.trainable_variables() if var.name.startswith("discriminator")]
-        discrim_optim = tf.train.AdamOptimizer(args.lr, args.beta1)
-        discrim_grads_and_vars = discrim_optim.compute_gradients(discrim_loss, var_list=discrim_tvars)
+        discrim_optim = tf.train.AdamOptimizer(args.lr_d, args.beta1, args.beta2)
+
+        discrim_total_loss = discrim_loss
+        if gradient_penalty is not None:
+            discrim_total_loss += gradient_penalty
+
+        discrim_grads_and_vars = discrim_optim.compute_gradients(discrim_total_loss, var_list=discrim_tvars)
         discrim_train = discrim_optim.apply_gradients(discrim_grads_and_vars)
 
     with tf.name_scope("generator_train"):
         with tf.control_dependencies([discrim_train]):
             gen_tvars = [var for var in tf.trainable_variables() if var.name.startswith("generator")]
-            gen_optim = tf.train.AdamOptimizer(args.lr, args.beta1)
+            gen_optim = tf.train.AdamOptimizer(args.lr_g, args.beta1, args.beta2)
             gen_grads_and_vars = gen_optim.compute_gradients(gen_loss, var_list=gen_tvars)
             gen_train = gen_optim.apply_gradients(gen_grads_and_vars)
-
-    ema = tf.train.ExponentialMovingAverage(decay=0.99)
-    update_losses = ema.apply([discrim_loss, gen_loss_GAN, gen_loss_L1])
 
     global_step = tf.train.get_or_create_global_step()
     incr_global_step = tf.assign(global_step, global_step+1)
@@ -68,13 +104,14 @@ def create_model(args, inputs, targets, EPS):
     return Model(
         predict_real=predict_real,
         predict_fake=predict_fake,
-        discrim_loss=ema.average(discrim_loss),
+        discrim_loss=discrim_loss,
         discrim_grads_and_vars=discrim_grads_and_vars,
-        gen_loss_GAN=ema.average(gen_loss_GAN),
-        gen_loss_L1=ema.average(gen_loss_L1),
+        gen_loss_GAN=gen_loss_GAN,
+        gen_loss_L1=gen_loss_L1,
         gen_grads_and_vars=gen_grads_and_vars,
         outputs=outputs,
-        train=tf.group(update_losses, incr_global_step, gen_train),
+        train=tf.group(incr_global_step, gen_train),
+        gradient_penalty=gradient_penalty,
     )
 
 def preprocess(image):
@@ -87,14 +124,14 @@ def deprocess(image):
         # [-1, 1] => [0, 1]
         return (image + 1) / 2
 
-def discrim_conv(batch_input, out_channels, stride):
+def discrim_conv(args, batch_input, out_channels, stride):
     padded_input = tf.pad(batch_input, [[0, 0], [1, 1], [1, 1], [0, 0]], mode="CONSTANT")
-    return tf.layers.conv2d(padded_input, out_channels, kernel_size=4, strides=(stride, stride), padding="valid", kernel_initializer=tf.random_normal_initializer(0, 0.02))
+    return tf.layers.conv2d(padded_input, out_channels, kernel_size=4, strides=(stride, stride), padding="valid", kernel_initializer=tf.random_normal_initializer(0, args.init_stddev))
 
 
 def gen_conv(args, batch_input, out_channels):
     # [batch, in_height, in_width, in_channels] => [batch, out_height, out_width, out_channels]
-    initializer = tf.random_normal_initializer(0, 0.02)
+    initializer = tf.random_normal_initializer(0, args.init_stddev)
     if args.separable_conv:
         return tf.layers.separable_conv2d(batch_input, out_channels, kernel_size=4, strides=(2, 2), padding="same", depthwise_initializer=initializer, pointwise_initializer=initializer)
     else:
@@ -103,7 +140,7 @@ def gen_conv(args, batch_input, out_channels):
 
 def gen_deconv(args, batch_input, out_channels):
     # [batch, in_height, in_width, in_channels] => [batch, out_height, out_width, out_channels]
-    initializer = tf.random_normal_initializer(0, 0.02)
+    initializer = tf.random_normal_initializer(0, args.init_stddev)
     if args.separable_conv:
         _b, h, w, _c = batch_input.shape
         resized_input = tf.image.resize_images(batch_input, [h * 2, w * 2], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
@@ -111,21 +148,14 @@ def gen_deconv(args, batch_input, out_channels):
     else:
         return tf.layers.conv2d_transpose(batch_input, out_channels, kernel_size=4, strides=(2, 2), padding="same", kernel_initializer=initializer)
 
-
 def lrelu(x, a):
-    with tf.name_scope("lrelu"):
-        # adding these together creates the leak part and linear part
-        # then cancels them out by subtracting/adding an absolute value term
-        # leak: a*x/2 - a*abs(x)/2
-        # linear: x/2 + abs(x)/2
+    return tf.nn.leaky_relu(x, a)
 
-        # this block looks like it has 2 inputs on the graph unless we do this
-        x = tf.identity(x)
-        return (0.5 * (1 + a)) * x + (0.5 * (1 - a)) * tf.abs(x)
+def batchnorm(args, inputs):
+    return tf.layers.batch_normalization(inputs, axis=3, epsilon=1e-5, momentum=0.1, training=True, gamma_initializer=tf.random_normal_initializer(1.0, args.init_stddev))
 
-
-def batchnorm(inputs):
-    return tf.layers.batch_normalization(inputs, axis=3, epsilon=1e-5, momentum=0.1, training=True, gamma_initializer=tf.random_normal_initializer(1.0, 0.02))
+def layernorm(inputs):
+    return tf.contrib.layers.layer_norm(inputs)
 
 def create_generator(args, generator_inputs, generator_outputs_channels):
     layers = []
@@ -150,8 +180,9 @@ def create_generator(args, generator_inputs, generator_outputs_channels):
             rectified = lrelu(layers[-1], 0.2)
             # [batch, in_height, in_width, in_channels] => [batch, in_height/2, in_width/2, out_channels]
             convolved = gen_conv(args, rectified, out_channels)
-            output = batchnorm(convolved)
-            layers.append(output)
+            if not args.no_gen_bn:
+                convolved = layernorm(convolved) if args.layer_norm else batchnorm(args, convolved)
+            layers.append(convolved)
 
     layer_specs = [
         (args.ngf * 8, 0.5),   # decoder_8: [batch, 1, 1, ngf * 8] => [batch, 2, 2, ngf * 8 * 2]
@@ -177,7 +208,8 @@ def create_generator(args, generator_inputs, generator_outputs_channels):
             rectified = tf.nn.relu(input)
             # [batch, in_height, in_width, in_channels] => [batch, in_height*2, in_width*2, out_channels]
             output = gen_deconv(args, rectified, out_channels)
-            output = batchnorm(output)
+            if not args.no_gen_bn:
+                output = layernorm(output) if args.layer_norm else batchnorm(args, output)
 
             if dropout > 0.0:
                 output = tf.nn.dropout(output, keep_prob=1 - dropout)
@@ -203,7 +235,7 @@ def create_discriminator(args, discrim_inputs, discrim_targets):
 
     # layer_1: [batch, 256, 256, in_channels * 2] => [batch, 128, 128, ndf]
     with tf.variable_scope("layer_1"):
-        convolved = discrim_conv(input, args.ndf, stride=2)
+        convolved = discrim_conv(args, input, args.ndf, stride=2)
         rectified = lrelu(convolved, 0.2)
         layers.append(rectified)
 
@@ -214,15 +246,23 @@ def create_discriminator(args, discrim_inputs, discrim_targets):
         with tf.variable_scope("layer_%d" % (len(layers) + 1)):
             out_channels = args.ndf * min(2**(i+1), 8)
             stride = 1 if i == n_layers - 1 else 2  # last layer here has stride 1
-            convolved = discrim_conv(layers[-1], out_channels, stride=stride)
-            normalized = batchnorm(convolved)
-            rectified = lrelu(normalized, 0.2)
+            convolved = discrim_conv(args, layers[-1], out_channels, stride=stride)
+            if not args.no_disc_bn:
+                convolved = layernorm(convolved) if args.layer_norm else batchnorm(args, convolved)
+            rectified = lrelu(convolved, 0.2)
             layers.append(rectified)
 
     # layer_5: [batch, 31, 31, ndf * 8] => [batch, 30, 30, 1]
     with tf.variable_scope("layer_%d" % (len(layers) + 1)):
-        convolved = discrim_conv(rectified, out_channels=1, stride=1)
-        output = tf.sigmoid(convolved)
+        convolved = discrim_conv(args, rectified, out_channels=1, stride=1)
+
+        # Only use sigmoid for normal GAN.
+        # WGAN requires a full linear output.
+        if args.gan_loss == "gan":
+            output = tf.sigmoid(convolved)
+        else:
+            output = convolved
+
         layers.append(output)
 
     return layers[-1]

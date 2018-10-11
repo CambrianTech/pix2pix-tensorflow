@@ -65,10 +65,21 @@ parser.add_argument("--scale_size", type=int, default=0, help="scale images to t
 parser.add_argument("--flip", dest="flip", action="store_true", help="flip images horizontally")
 parser.add_argument("--no_flip", dest="flip", action="store_false", help="don't flip images horizontally")
 parser.set_defaults(flip=True)
-parser.add_argument("--lr", type=float, default=0.0002, help="initial learning rate for adam")
+parser.add_argument("--no_disc_bn", dest="no_disc_bn", action="store_true", help="don't use batch normalization in the discriminator")
+parser.set_defaults(no_disc_bn=False)
+parser.add_argument("--no_gen_bn", dest="no_gen_bn", action="store_true", help="don't use batch normalization in the generator")
+parser.set_defaults(no_gen_bn=False)
+parser.add_argument("--layer_norm", dest="layer_norm", action="store_true", help="use layer normalization instead of batch normalization")
+parser.set_defaults(layer_norm=False)
+parser.add_argument("--lr_g", type=float, default=0.0002, help="generator learning rate")
+parser.add_argument("--lr_d", type=float, default=0.0002, help="discriminator learning rate")
 parser.add_argument("--beta1", type=float, default=0.5, help="momentum term of adam")
+parser.add_argument("--beta2", type=float, default=0.999, help="beta2 term of adam")
 parser.add_argument("--l1_weight", type=float, default=100.0, help="weight on L1 term for generator gradient")
 parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN term for generator gradient")
+parser.add_argument("--gan_loss", type=str, default="gan", choices=["gan", "wgan"], help="loss to use for the GAN")
+parser.add_argument("--gp_weight", type=float, default=0, help="weight on gradient penalty term")
+parser.add_argument("--init_stddev", type=float, default=0.02, help="standard deviation used for weight initialziation")
 
 # export options
 parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
@@ -663,6 +674,12 @@ def main():
     tf.summary.scalar("discriminator_loss", model.discrim_loss)
     tf.summary.scalar("generator_loss_GAN", model.gen_loss_GAN)
     tf.summary.scalar("generator_loss_L1", model.gen_loss_L1)
+
+    if a.gan_loss == "wgan":
+        tf.summary.scalar("wgan_d_plus_g", model.discrim_loss + model.gen_loss_GAN)
+
+    if model.gradient_penalty is not None:
+        tf.summary.scalar("gradient_penalty", model.gradient_penalty)
 
     for var in tf.trainable_variables():
         tf.summary.histogram(var.op.name + "/values", var)
