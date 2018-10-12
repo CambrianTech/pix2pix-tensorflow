@@ -69,7 +69,7 @@ def pix2pix_config():
         "gan_weight": 1.0,
         "output_filetype": "png",
         "no_disc_bn": False,
-        "no_gen_bn_": False,
+        "no_gen_bn": False,
         "layer_norm": False,
         "lr_g": 0.0002,
         "lr_d": 0.0002,
@@ -456,6 +456,7 @@ def pixelPerfect(fetches, output_dir, src_contribution=0.5, dest_channel=2):
 @ex.automain
 @LogFileWriter(ex)
 def main(a, _seed):
+    print("Args:", a)
 
     if a["scale_size"] == 0:
         a["scale_size"] = a["crop_size"]
@@ -670,7 +671,7 @@ def main(a, _seed):
     tf.summary.scalar("generator_loss_GAN", model.gen_loss_GAN)
     tf.summary.scalar("generator_loss_L1", model.gen_loss_L1)
 
-    if a.gan_loss == "wgan":
+    if a["gan_loss"] == "wgan":
         tf.summary.scalar("wgan_d_plus_g", model.discrim_loss + model.gen_loss_GAN)
 
     if model.gradient_penalty is not None:
