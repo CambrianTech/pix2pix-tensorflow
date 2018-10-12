@@ -270,7 +270,7 @@ def main():
         "b_input_dir": a.b_input_dir,
         "a_match_exp": a.a_match_exp,
         "b_match_exp": a.b_match_exp,
-        "filter_categories": a.filtered_categories
+        "filter_categories": a.filter_categories
     }
     a_names, b_names = utils.getABImagePaths(a_dir, require_rgb=False)
 
