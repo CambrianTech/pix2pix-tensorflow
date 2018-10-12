@@ -272,7 +272,7 @@ def load_examples(a):
             with tf.control_dependencies([assertion]):
                 raw_input_a = tf.identity(raw_input_a)
 
-            raw_input_a["set_shape"]([None, None, 3])
+            raw_input_a.set_shape([None, None, 3])
 
             b_path = tf.decode_raw(path_queue[1], tf.uint8)
             b_contents = tf.read_file(path_queue[1])
