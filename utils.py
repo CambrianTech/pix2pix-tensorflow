@@ -130,7 +130,7 @@ def getCombinedImage(a_path, b_path, a_margin=(0,0,0,0), b_margin=(0,0,0,0), a_f
 
 def hasParams(args, params):
     for param in params:
-        paramValue = eval("args." + param)
+        paramValue = eval('args["' + param + '"]')
         if paramValue is None:
             print("Error: argument --%s is required" % param)
             return False
@@ -140,13 +140,13 @@ def getFilteredDirs(args):
     
     filtered_dirs = None
 
-    if not args.filter_categories is None:
+    if not args["filter_categories"] is None:
         filtered_dirs = []
-        if not os.path.isfile(args.filter_categories): 
-                print("Error: filter_categories file %s does not exist" % args.filter_categories)
+        if not os.path.isfile(args["filter_categories"]): 
+                print("Error: filter_categories file %s does not exist" % args["filter_categories"])
                 return [], []
 
-        with open(args.filter_categories) as f:
+        with open(args["filter_categories"]) as f:
             content = f.readlines()
             content = [x.strip() for x in content] 
 
@@ -162,38 +162,38 @@ def getFilteredDirs(args):
 def getABImagePaths(args, require_rgb=True):
     filtered_dirs = getFilteredDirs(args)
 
-    if not args.a_input_dir is None:
+    if not args["a_input_dir"] is None:
         if not hasParams(args, ["a_input_dir", "b_input_dir"]):
             return [], []
 
-        if not os.path.isdir(args.a_input_dir): 
-            print("Error: a_input_dir %s does not exist" % args.a_input_dir)
+        if not os.path.isdir(args["a_input_dir"]): 
+            print("Error: a_input_dir %s does not exist" % args["a_input_dir"])
             return [], []
 
-        if not os.path.isdir(args.b_input_dir): 
-            print("Error: b_input_dir %s does not exist" % args.b_input_dir)
+        if not os.path.isdir(args["b_input_dir"]): 
+            print("Error: b_input_dir %s does not exist" % args["b_input_dir"])
             return [], []
 
         if not filtered_dirs is None:
-            filtered_dirs.append(os.path.basename(args.a_input_dir))
-            filtered_dirs.append(os.path.basename(args.b_input_dir))
+            filtered_dirs.append(os.path.basename(args["a_input_dir"]))
+            filtered_dirs.append(os.path.basename(args["b_input_dir"]))
 
-        a_names=get_image_paths(args.a_input_dir, args.a_match_exp, filtered_dirs=filtered_dirs, require_rgb=require_rgb)
-        b_names=get_image_paths(args.b_input_dir, args.b_match_exp, filtered_dirs=filtered_dirs, require_rgb=require_rgb)
+        a_names=get_image_paths(args["a_input_dir"], args["a_match_exp"], filtered_dirs=filtered_dirs, require_rgb=require_rgb)
+        b_names=get_image_paths(args["b_input_dir"], args["b_match_exp"], filtered_dirs=filtered_dirs, require_rgb=require_rgb)
     else:
 
         if not hasParams(args, ["a_match_exp", "b_match_exp"]):
             return [], []
 
-        if not os.path.isdir(args.input_dir): 
-            print("Error: input_dir %s does not exist" % args.input_dir)
+        if not os.path.isdir(args["input_dir"]): 
+            print("Error: input_dir %s does not exist" % args["input_dir"])
             return [], []
 
         if not filtered_dirs is None:
-            filtered_dirs.append(os.path.basename(args.input_dir))
+            filtered_dirs.append(os.path.basename(args["input_dir"]))
 
-        a_names=get_image_paths(args.input_dir, args.a_match_exp, filtered_dirs=filtered_dirs, require_rgb=require_rgb)
-        b_names=get_image_paths(args.input_dir, args.b_match_exp, filtered_dirs=filtered_dirs, require_rgb=require_rgb)
+        a_names=get_image_paths(args["input_dir"], args["a_match_exp"], filtered_dirs=filtered_dirs, require_rgb=require_rgb)
+        b_names=get_image_paths(args["input_dir"], args["b_match_exp"], filtered_dirs=filtered_dirs, require_rgb=require_rgb)
 
     return a_names, b_names
 
