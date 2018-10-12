@@ -264,8 +264,14 @@ def processFiles(a_names, b_names):
             print ("%s + %s = %s" % (a_name, b_name, combined_img_path))        
 
 def main():
-
-    a_names, b_names = utils.getABImagePaths(a, require_rgb=False)
+    a_dir = {
+        "input_dir": a.input_dir,
+        "a_input_dir": a.a_input_dir,
+        "b_input_dir": a.b_input_dir,
+        "a_match_exp": a.a_match_exp,
+        "b_match_exp": a.b_match_exp,
+    }
+    a_names, b_names = utils.getABImagePaths(a_dir, require_rgb=False)
 
     processFiles(a_names, b_names)  
     
