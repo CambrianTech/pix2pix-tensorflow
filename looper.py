@@ -27,7 +27,7 @@ from tensorflow.python.tools import optimize_for_inference_lib, selective_regist
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--input_dir", required=False, default="uploads", help="Combined Source and Target Input Path")
+parser.add_argument("--input_dir", required=True, help="Combined Source and Target Input Path")
 parser.add_argument("--input_match_exp", required=False, help="Input Match Expression")
 parser.add_argument("--filter_categories", required=False, help="Path to file with valid categories")
 

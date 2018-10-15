@@ -134,6 +134,25 @@ import ast
 # --a_match_exp "*_C.png" --b_match_exp "*_L.png" \
 # --output_dir $datasets/shadows_ab 
 
+# python ab_converter.py \
+# --input_dir $datasets/unreal512 \
+# --a_match_exp "*_C.png" --b_match_exp "*_N.png" \
+# --output_dir $datasets/normals_unreal512_ab 
+
+# python pix2pix.py --mode train \
+# --output_dir normals_train \
+# --max_epochs 2000 \
+# --a_input_dir $datasets/mlt_v2 \
+# --a_match_exp '*.png' \
+# --b_input_dir $datasets/normals_v2 \
+# --b_match_exp '*_norm_camera.png' \
+# --which_direction AtoB --no_flip \
+# --ngf=128 --ndf=128
+
+# python pix2pix.py --mode train --output_dir normals512 \
+# --input_dir ../datasets/unreal512 \
+# --which_direction AtoB --no_flip --ndf 128 --ngf 128 --crop_size 512 --max_epochs 2000
+
 parser = argparse.ArgumentParser()
 
 # required together:
