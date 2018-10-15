@@ -134,6 +134,11 @@ import ast
 # --a_match_exp "*_C.png" --b_match_exp "*_L.png" \
 # --output_dir $datasets/shadows_ab 
 
+#normals:
+ # python pix2pix.py -m ec2-34-204-179-110.compute-1.amazonaws.com:27017:Normals \
+ # with 'a={"input_dir": "../datasets/unreal_redux/images", "a_match_exp": "*_C.png", "b_match_exp": "*_N.png", "output_dir": "output", "flip": False, \
+ # "batch_size": 7, "lr_d": 0.00005, "lr_g": 0.00001, "init_stddev": 0.0001, "ngf": 128, "ndf": 128, "crop_size": 512}'
+
 parser = argparse.ArgumentParser()
 
 # required together:
