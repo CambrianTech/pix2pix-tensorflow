@@ -237,7 +237,7 @@ def load_examples(a):
             path_queue = tf.train.string_input_producer(combined_names, shuffle=a["mode"] == "train")
             reader = tf.WholeFileReader()
             paths, contents = reader.read(path_queue)
-            raw_input = decode(contents)
+            raw_input = decode(contents, channels=3)
             raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
 
             assertion = tf.assert_equal(tf.shape(raw_input)[2], 3, message="image does not have 3 channels")
@@ -265,7 +265,7 @@ def load_examples(a):
 
             a_path = tf.decode_raw(path_queue[0], tf.uint8)
             a_contents = tf.read_file(path_queue[0])
-            raw_input_a = decode(a_contents)
+            raw_input_a = decode(a_contents, channels=3)
             raw_input_a = tf.image.convert_image_dtype(raw_input_a, dtype=tf.float32)
 
             assertion = tf.assert_equal(tf.shape(raw_input_a)[2], 3, message="image {0} does not have 3 channels".format(a_path))
@@ -276,7 +276,7 @@ def load_examples(a):
 
             b_path = tf.decode_raw(path_queue[1], tf.uint8)
             b_contents = tf.read_file(path_queue[1])
-            raw_input_b = decode(b_contents)
+            raw_input_b = decode(b_contents, channels=3)
             raw_input_b = tf.image.convert_image_dtype(raw_input_b, dtype=tf.float32)            
 
             assertion = tf.assert_equal(tf.shape(raw_input_b)[2], 3, message="image {0} does not have 3 channels".format(b_path))
