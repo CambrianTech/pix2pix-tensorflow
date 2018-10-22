@@ -80,6 +80,7 @@ def pix2pix_config():
         "gan_loss": "gan",
         "gp_weight": 0,
         "init_stddev": 0.02,
+        "angle_output": False,
     }
 
 EPS = 1e-12

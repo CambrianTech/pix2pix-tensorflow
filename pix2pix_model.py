@@ -220,8 +220,21 @@ def create_generator(args, generator_inputs, generator_outputs_channels):
     with tf.variable_scope("decoder_1"):
         input = tf.concat([layers[-1], layers[0]], axis=3)
         rectified = tf.nn.relu(input)
-        output = gen_deconv(args, rectified, generator_outputs_channels)
-        output = tf.tanh(output, name="output")
+        if args["angle_output"]:
+            # Produce 3D unit vector from 2 angles
+            angle_x = gen_deconv(args, rectified, 1)
+            angle_y = gen_deconv(args, rectified, 1)
+
+            sin_x, cos_x = tf.sin(angle_x), tf.cos(angle_x)
+            sin_y, cos_y = tf.sin(angle_y), tf.cos(angle_y)
+            output_x = sin_x * cos_y
+            output_y = cos_x * cos_y
+            output_z = sin_y
+
+            output = tf.concat((output_x, output_y, output_z), axis=-1)
+        else:
+            output = gen_deconv(args, rectified, generator_outputs_channels)
+            output = tf.tanh(output, name="output")
         layers.append(output)
 
     return layers[-1]
