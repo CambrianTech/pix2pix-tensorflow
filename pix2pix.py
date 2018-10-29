@@ -368,7 +368,7 @@ def append_index(filesets, output_dir, step=False):
 @ex.automain
 @LogFileWriter(ex)
 def main(args, _seed):
-    print("Args:", args)
+    print("\n\npython pix2pix.py with \"args=", args, "\"\n")
 
     if args["scale_size"] == 0:
         args["scale_size"] = args["crop_size"]
