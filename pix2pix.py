@@ -30,6 +30,7 @@ ex = Experiment("pix2pix")
 
 #Examples:
 
+# Training:
 #train with composite a/b images:
 # python pix2pix.py with "args = {'input_dir': '/Volumes/YUGE/datasets/shadows_ab'}"
 
@@ -38,6 +39,9 @@ ex = Experiment("pix2pix")
 
 #train with two directories using four channels:
 # python pix2pix.py with "args = {'channels': 4, 'a_input_dir': '/Users/joelteply/Desktop/unreal_rugs_binary/train', 'b_input_dir': '/Users/joelteply/Desktop/unreal_rugs_binary/train_labels'}"
+
+# Exporting for feed forward
+# python pix2pix.py with "args = {'mode': 'export', 'checkpoint':'/Users/joelteply/Desktop/normals_pix2pix'}"
 
 @ex.config
 def pix2pix_config():
@@ -398,7 +402,7 @@ def main(args, _seed):
             raise Exception("checkpoint required for mode: " + args["mode"])
 
         # load some options from the checkpoint
-        options = {"which_direction", "ngf", "ndf", "lab_colorization"}
+        options = {"which_direction", "ngf", "ndf", "lab_colorization", "crop_size", "channels"}
         with open(os.path.join(args["checkpoint"], "options.json")) as f:
             for key, val in json.loads(f.read()).items():
                 if key in options:
@@ -442,7 +446,7 @@ def main(args, _seed):
             sess.run(init_op)
 
             print("##############################################################\n")
-            print("\nLoading model from checkpoint")
+            print("\nLoading model from checkpoint %s" % args["checkpoint"])
             checkpoint = tf.train.latest_checkpoint(args["checkpoint"])
             restore_saver.restore(sess, checkpoint)
             
