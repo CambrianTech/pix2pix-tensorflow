@@ -368,7 +368,7 @@ def append_index(filesets, output_dir, step=False):
 @ex.automain
 @LogFileWriter(ex)
 def main(args, _seed):
-    print("\n\npython pix2pix.py with \"args=", args, "\"\n")
+    print("\n\npython pix2pix.py with \"args =", args, "\"\n")
 
     if args["scale_size"] == 0:
         args["scale_size"] = args["crop_size"]
@@ -408,7 +408,7 @@ def main(args, _seed):
         batch_input = tf.expand_dims(input_image, axis=0)
 
         with tf.variable_scope("generator"):
-            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(a, pix2pix_model.preprocess(batch_input), args["channels"]))
+            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(args, pix2pix_model.preprocess(batch_input), args["channels"]))
 
         # output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
         # output_image = tf.identity(output_image, name='output')
@@ -456,7 +456,7 @@ def main(args, _seed):
         batch_input = tf.expand_dims(input_image, axis=0)
 
         with tf.variable_scope("generator"):
-            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(a, pix2pix_model.preprocess(batch_input), args["channels"]))
+            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(args, pix2pix_model.preprocess(batch_input), args["channels"]))
 
         # output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
         # output_image = tf.identity(output_image, name='output')
@@ -530,7 +530,7 @@ def main(args, _seed):
     print("examples count = %d" % examples.count)
 
     # inputs and targets are [batch_size, height, width, channels]
-    model = pix2pix_model.create_model(a, examples.inputs, examples.targets, EPS)
+    model = pix2pix_model.create_model(args, examples.inputs, examples.targets, EPS)
 
     # undo colorization splitting on images that we use for display/output
     inputs = pix2pix_model.deprocess(examples.inputs)
