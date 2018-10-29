@@ -28,6 +28,17 @@ from sacred.stflow import LogFileWriter
 
 ex = Experiment("pix2pix")
 
+#Examples:
+
+#train with composite a/b images:
+# python pix2pix.py with "args = {'input_dir': '/Volumes/YUGE/datasets/shadows_ab'}"
+
+#train with two directories:
+# python pix2pix.py with "args = {'a_input_dir': '/Volumes/YUGE/datasets/unreal_rugs_binary/train', 'b_input_dir': '/Volumes/YUGE/datasets/unreal_rugs_binary/train_labels'}"
+
+#train with two directories using four channels:
+# python pix2pix.py with "args = {'channels': 4, 'a_input_dir': '/Users/joelteply/Desktop/unreal_rugs_binary/train', 'b_input_dir': '/Users/joelteply/Desktop/unreal_rugs_binary/train_labels'}"
+
 @ex.config
 def pix2pix_config():
     args = {
@@ -189,7 +200,7 @@ def load_examples(args):
     num_images = 0
 
     if not args["a_input_dir"] is None or not args["a_match_exp"] is None:
-        a_names, b_names = utils.getABImagePaths(a)
+        a_names, b_names = utils.getABImagePaths(args)
         if not a_names is None:
             num_images = len(a_names)
     elif not args["input_dir"] is None:
