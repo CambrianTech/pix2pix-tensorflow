@@ -614,13 +614,28 @@ def main(args, _seed):
 
     # summaries
     with tf.name_scope("inputs_summary"):
-        tf.summary.image("inputs", converted_inputs[:, :, :, :args["channels"]])
+        if args["a_input_dir"] is not None:
+            a_input_dir_count = len(args["a_input_dir"].split(","))
+            for i in range(a_input_dir_count):
+                tf.summary.image("inputs_%d" % i, converted_inputs[:, :, :, i*args["channels"]:(i+1)*args["channels"]])
+        else:
+            tf.summary.image("inputs", converted_inputs[:, :, :, :args["channels"]])
 
     with tf.name_scope("targets_summary"):
-        tf.summary.image("targets", converted_targets[:, :, :, :args["channels"]])
+        if args["b_input_dir"] is not None:
+            b_input_dir_count = len(args["b_input_dir"].split(","))
+            for i in range(b_input_dir_count):
+                tf.summary.image("targets_%d" % i, converted_targets[:, :, :, i*args["channels"]:(i+1)*args["channels"]])
+        else:
+            tf.summary.image("targets", converted_targets[:, :, :, :args["channels"]])
 
     with tf.name_scope("outputs_summary"):
-        tf.summary.image("outputs", converted_outputs)
+        if args["b_input_dir"] is not None:
+            b_input_dir_count = len(args["b_input_dir"].split(","))
+            for i in range(b_input_dir_count):
+                tf.summary.image("outputs_%d" % i, converted_outputs[:, :, :, i*args["channels"]:(i+1)*args["channels"]])
+        else:
+            tf.summary.image("outputs", converted_outputs[:, :, :, :args["channels"]])
 
     with tf.name_scope("predict_real_summary"):
         tf.summary.image("predict_real", tf.image.convert_image_dtype(model.predict_real, dtype=tf.uint8))
