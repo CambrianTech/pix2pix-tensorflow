@@ -305,12 +305,11 @@ def load_examples(args):
             for path_queue in path_queues:
                 path = tf.decode_raw(path_queue, tf.uint8)
                 contents = tf.read_file(path_queue)
-                raw_input = decode(contents, channels=args["channels"])
+                raw_input = tf.image.decode_image(contents, channels=args["channels"])
                 raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
+                raw_input.set_shape([None, None, args["channels"]])
 
                 images.append(pix2pix_model.preprocess(raw_input))
-
-            
 
             assert len(images) == a_paths_count + b_paths_count
 
