@@ -47,7 +47,6 @@ ex = Experiment("pix2pix")
 def pix2pix_config():
     args = {
         "a_input_dir": None,
-        "a_input_dir2": None,
         "b_input_dir": None,
         "input_dir": None,
         "input_match_exp": None,
@@ -204,9 +203,23 @@ def load_examples(args):
     num_images = 0
 
     if not args["a_input_dir"] is None or not args["a_match_exp"] is None:
-        a_names, b_names = utils.getABImagePaths(args)
+        a_input_dirs = args["a_input_dir"].split(",")
+        b_input_dirs = args["b_input_dir"].split(",")
+
+        a_names = [utils.get_image_paths(input_dir, args["a_match_exp"]) for input_dir in a_input_dirs]
+        b_names = [utils.get_image_paths(input_dir, args["b_match_exp"]) for input_dir in b_input_dirs]
+
+        if any([len(a_names[0]) != names for names in a_names]):
+            raise Exception("Image count for a_input_dirs not equal")
+
+        if any([len(b_names[0]) != names for names in b_names]):
+            raise Exception("Image count for b_input_dirs not equal")
+
+        if len(a_names[0]) != len(b_names[0]):
+            raise Exception("len a_input_dirs not equal to len b_input_dirs")
+
         if not a_names is None:
-            num_images = len(a_names)
+            num_images = len(a_names[0])
     elif not args["input_dir"] is None:
         combined_names = utils.get_image_paths(args["input_dir"], args["input_match_exp"])
         if not combined_names is None:
@@ -218,7 +231,7 @@ def load_examples(args):
         raise Exception("No images found at input path")
 
     if len(a_names) > 0:
-        filename, file_extension = os.path.splitext(a_names[0])
+        filename, file_extension = os.path.splitext(a_names[0][0])
     else:
         filename, file_extension = os.path.splitext(combined_names[0])
 
@@ -261,34 +274,29 @@ def load_examples(args):
 # you will want to use tf.concat to combine them together.
 
         else:
-            path_queue = tf.train.slice_input_producer([a_names, b_names], shuffle=args["mode"] == "train")
-            paths = path_queue
+            path_queues = tf.train.slice_input_producer(a_names + b_names, shuffle=args["mode"] == "train")
 
-            a_path = tf.decode_raw(path_queue[0], tf.uint8)
-            a_contents = tf.read_file(path_queue[0])
-            raw_input_a = decode(a_contents, channels=args["channels"])
-            raw_input_a = tf.image.convert_image_dtype(raw_input_a, dtype=tf.float32)
+            images = []
 
-            assertion = tf.assert_equal(tf.shape(raw_input_a)[2], args["channels"], message="image %s does not have %d channels" % (a_path, args["channels"]))
-            with tf.control_dependencies([assertion]):
-                raw_input_a = tf.identity(raw_input_a)
+            for path_queue in path_queues:
+                path = tf.decode_raw(path_queue, tf.uint8)
+                contents = tf.read_file(path_queue)
+                raw_input = decode(contents, channels=args["channels"])
+                raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
 
-            raw_input_a.set_shape([None, None, args["channels"]])
+                images.append(pix2pix_model.preprocess(raw_input))
 
-            b_path = tf.decode_raw(path_queue[1], tf.uint8)
-            b_contents = tf.read_file(path_queue[1])
-            raw_input_b = decode(b_contents, channels=args["channels"])
-            raw_input_b = tf.image.convert_image_dtype(raw_input_b, dtype=tf.float32)            
+            a_paths_count = len(a_names)
+            b_paths_count = len(b_names)
 
-            assertion = tf.assert_equal(tf.shape(raw_input_b)[2], args["channels"], message="image %s does not have %d channels" % (b_path, args["channels"]))
-            with tf.control_dependencies([assertion]):
-                raw_input_b = tf.identity(raw_input_b)
+            assert len(images) == a_paths_count + b_paths_count
 
-            raw_input_b.set_shape([None, None, args["channels"]])
+            a_images = images[:a_paths_count]
+            b_images = images[a_paths_count:]
 
-            a_images = pix2pix_model.preprocess(raw_input_a)
-            b_images = pix2pix_model.preprocess(raw_input_b)
-    
+            # Stack along channel dimension
+            a_images = tf.stack(a_images, axis=-1)
+            b_images = tf.stack(b_images, axis=-1)
 
     if args["which_direction"] == "AtoB":
         inputs, targets = [a_images, b_images]
