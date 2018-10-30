@@ -295,6 +295,11 @@ def load_examples(args):
         else:
             path_queues = tf.train.slice_input_producer(a_names + b_names, shuffle=args["mode"] == "train")
 
+            a_paths_count = len(a_names)
+            b_paths_count = len(b_names)
+
+            paths = [path_queues[0], path_queues[a_paths_count]]
+
             images = []
 
             for path_queue in path_queues:
@@ -305,8 +310,7 @@ def load_examples(args):
 
                 images.append(pix2pix_model.preprocess(raw_input))
 
-            a_paths_count = len(a_names)
-            b_paths_count = len(b_names)
+            
 
             assert len(images) == a_paths_count + b_paths_count
 
