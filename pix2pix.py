@@ -205,9 +205,28 @@ def load_examples(args):
     if not args["a_input_dir"] is None or not args["a_match_exp"] is None:
         a_input_dirs = args["a_input_dir"].split(",")
         b_input_dirs = args["b_input_dir"].split(",")
+        if args["a_match_exp"] is not None:
+            a_match_exps = args["a_match_exp"].split(",")
+        else:
+            a_match_exps = None
 
-        a_names = [utils.get_image_paths(input_dir, args["a_match_exp"]) for input_dir in a_input_dirs]
-        b_names = [utils.get_image_paths(input_dir, args["b_match_exp"]) for input_dir in b_input_dirs]
+        if args["b_match_exp"] is not None:
+            b_match_exps = args["b_match_exp"].split(",")
+        else:
+            b_match_exps = None
+
+        assert a_match_exps is None or len(a_input_dirs) == len(a_match_exps)
+        assert b_match_exps is None or len(b_input_dirs) == len(b_match_exps)
+
+        if a_match_exps:
+            a_names = [utils.get_image_paths(input_dir, match_exp) for input_dir, match_exp in zip(a_input_dirs, a_match_exps)]
+        else:
+            a_names = [utils.get_image_paths(input_dir, None) for input_dir in a_input_dirs]
+
+        if b_match_exps:
+            b_names = [utils.get_image_paths(input_dir, match_exp) for input_dir in zip(b_input_dirs, b_match_exps)]
+        else:
+            b_names = [utils.get_image_paths(input_dir, None) for input_dir in b_input_dirs]
 
         if any([len(a_names[0]) != names for names in a_names]):
             raise Exception("Image count for a_input_dirs not equal")
