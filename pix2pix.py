@@ -228,10 +228,10 @@ def load_examples(args):
         else:
             b_names = [utils.get_image_paths(input_dir, None) for input_dir in b_input_dirs]
 
-        if any([len(a_names[0]) != names for names in a_names]):
+        if any([len(a_names[0]) != len(names) for names in a_names]):
             raise Exception("Image count for a_input_dirs not equal")
 
-        if any([len(b_names[0]) != names for names in b_names]):
+        if any([len(b_names[0]) != len(names) for names in b_names]):
             raise Exception("Image count for b_input_dirs not equal")
 
         if len(a_names[0]) != len(b_names[0]):
