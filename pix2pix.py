@@ -317,8 +317,8 @@ def load_examples(args):
             b_images = images[a_paths_count:]
 
             # Stack along channel dimension
-            a_images = tf.stack(a_images, axis=-1)
-            b_images = tf.stack(b_images, axis=-1)
+            a_images = tf.concat(a_images, axis=-1)
+            b_images = tf.concat(b_images, axis=-1)
 
     if args["which_direction"] == "AtoB":
         inputs, targets = [a_images, b_images]
