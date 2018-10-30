@@ -614,10 +614,10 @@ def main(args, _seed):
 
     # summaries
     with tf.name_scope("inputs_summary"):
-        tf.summary.image("inputs", converted_inputs)
+        tf.summary.image("inputs", converted_inputs[:, :, :, :args["channels"]])
 
     with tf.name_scope("targets_summary"):
-        tf.summary.image("targets", converted_targets)
+        tf.summary.image("targets", converted_targets[:, :, :, :args["channels"]])
 
     with tf.name_scope("outputs_summary"):
         tf.summary.image("outputs", converted_outputs)
