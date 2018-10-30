@@ -308,8 +308,12 @@ def load_examples(args):
                 raw_input = tf.image.decode_image(contents, channels=args["channels"])
                 raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
                 raw_input.set_shape([None, None, args["channels"]])
+                raw_input = pix2pix_model.preprocess(raw_input)
 
-                images.append(pix2pix_model.preprocess(raw_input))
+                # Resize here instead of later since we need to concat
+                raw_input = tf.image.resize_images(raw_input, (args["scale_size"], args["scale_size"]), method=tf.image.ResizeMethod.AREA)
+
+                images.append(raw_input)
 
             assert len(images) == a_paths_count + b_paths_count
 
