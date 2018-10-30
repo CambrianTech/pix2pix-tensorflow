@@ -224,7 +224,7 @@ def load_examples(args):
             a_names = [utils.get_image_paths(input_dir, None) for input_dir in a_input_dirs]
 
         if b_match_exps:
-            b_names = [utils.get_image_paths(input_dir, match_exp) for input_dir in zip(b_input_dirs, b_match_exps)]
+            b_names = [utils.get_image_paths(input_dir, match_exp) for input_dir, match_exp in zip(b_input_dirs, b_match_exps)]
         else:
             b_names = [utils.get_image_paths(input_dir, None) for input_dir in b_input_dirs]
 
