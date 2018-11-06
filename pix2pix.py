@@ -476,7 +476,7 @@ def main(a, _seed):
             raise Exception("checkpoint required for mode: " + a["mode"])
 
         # load some options from the checkpoint
-        options = {"which_direction", "ngf", "ndf", "lab_colorization"}
+        options = {"which_direction", "ngf", "ndf", "lab_colorization", "angle_output"}
         with open(os.path.join(a["checkpoint"], "options.json")) as f:
             for key, val in json.loads(f.read()).items():
                 if key in options:
