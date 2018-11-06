@@ -231,7 +231,7 @@ def create_generator(args, generator_inputs, generator_outputs_channels):
             output_y = cos_x * cos_y
             output_z = sin_y
 
-            output = tf.concat((output_x, output_y, output_z), axis=-1)
+            output = tf.concat((output_x, output_y, output_z), axis=-1, name="output")
         else:
             output = gen_deconv(args, rectified, generator_outputs_channels)
             output = tf.tanh(output, name="output")
