@@ -28,9 +28,24 @@ from sacred.stflow import LogFileWriter
 
 ex = Experiment("pix2pix")
 
+#Examples:
+
+# Training:
+#train with composite a/b images:
+# python pix2pix.py with "args = {'input_dir': '/Volumes/YUGE/datasets/shadows_ab'}"
+
+#train with two directories:
+# python pix2pix.py with "args = {'a_input_dir': '/Volumes/YUGE/datasets/unreal_rugs_binary/train', 'b_input_dir': '/Volumes/YUGE/datasets/unreal_rugs_binary/train_labels'}"
+
+#train with two directories using four channels:
+# python pix2pix.py with "args = {'channels': 4, 'a_input_dir': '/Users/joelteply/Desktop/unreal_rugs_binary/train', 'b_input_dir': '/Users/joelteply/Desktop/unreal_rugs_binary/train_labels'}"
+
+# Exporting for feed forward
+# python pix2pix.py with "args = {'mode': 'export', 'checkpoint':'/Users/joelteply/Desktop/normals_pix2pix'}"
+
 @ex.config
 def pix2pix_config():
-    a = {
+    args = {
         "a_input_dir": None,
         "a_input_dir2": None,
         "b_input_dir": None,
@@ -40,7 +55,8 @@ def pix2pix_config():
         "b_match_exp": None,
         "filter_categories": None,
         "mode": "train",
-        "output_dir": None,
+        "channels": 3,
+        "output_dir": "output",
         "deploy_name": "model.pb",
         "checkpoint": None,
         "transform_ops": "strip_unused_nodes,add_default_attributes, \
@@ -87,17 +103,14 @@ EPS = 1e-12
 
 Examples = collections.namedtuple("Examples", "paths, inputs, targets, count, steps_per_epoch")
 
-def check_image(image):
-    assertion = tf.assert_equal(tf.shape(image)[-1], 3, message="image must have 3 color channels")
+def check_image(image, channels=3):
+    assertion = tf.assert_equal(tf.shape(image)[-1], channels, message=("image must have %d color channels" % channels))
     with tf.control_dependencies([assertion]):
         image = tf.identity(image)
 
-    if image.get_shape().ndims not in (3, 4):
-        raise ValueError("image must be either 3 or 4 dimensions")
-
     # make the last dimension 3 so that you can unstack the colors
     shape = list(image.get_shape())
-    shape[-1] = 3
+    shape[-1] = channels
     image.set_shape(shape)
     return image
 
@@ -184,31 +197,19 @@ def lab_to_rgb(lab):
 
         return tf.reshape(srgb_pixels, tf.shape(lab))
 
-def read_images_from_disk(input_queue):
-    """Consumes a single filename and label as a ' '-delimited string.
-    Args:
-      filename_and_label_tensor: A scalar string tensor.
-    Returns:
-      Two tensors: the decoded image, and the string label.
-    """
-    label = input_queue[1]
-    file_contents = tf.read_file(input_queue[0])
-    example = tf.image.decode_png(file_contents, channels=3)
-    return example, label
-
 @ex.capture
-def load_examples(a):
+def load_examples(args):
     a_names = []
     b_names = []
     combined_names = []
     num_images = 0
 
-    if not a["a_input_dir"] is None or not a["a_match_exp"] is None:
-        a_names, b_names = utils.getABImagePaths(a)
+    if not args["a_input_dir"] is None or not args["a_match_exp"] is None:
+        a_names, b_names = utils.getABImagePaths(args)
         if not a_names is None:
             num_images = len(a_names)
-    elif not a["input_dir"] is None:
-        combined_names = utils.get_image_paths(a["input_dir"], a["input_match_exp"])
+    elif not args["input_dir"] is None:
+        combined_names = utils.get_image_paths(args["input_dir"], args["input_match_exp"])
         if not combined_names is None:
             num_images = len(combined_names)
     else:
@@ -235,17 +236,17 @@ def load_examples(a):
 
     with tf.name_scope("load_images"):
         if len(combined_names) > 0:
-            path_queue = tf.train.string_input_producer(combined_names, shuffle=a["mode"] == "train")
+            path_queue = tf.train.string_input_producer(combined_names, shuffle=args["mode"] == "train")
             reader = tf.WholeFileReader()
             paths, contents = reader.read(path_queue)
-            raw_input = decode(contents, channels=3)
+            raw_input = decode(contents, channels=args["channels"])
             raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
 
-            assertion = tf.assert_equal(tf.shape(raw_input)[2], 3, message="image does not have 3 channels")
+            assertion = tf.assert_equal(tf.shape(raw_input)[2], args["channels"], message=("image does not have %d channels" % args["channels"]))
             with tf.control_dependencies([assertion]):
                 raw_input = tf.identity(raw_input)
 
-            raw_input.set_shape([None, None, 3])
+            raw_input.set_shape([None, None, args["channels"]])
 
             # break apart image pair and move to range [-1, 1]
             width = tf.shape(raw_input)[1] # [height, width, channels]
@@ -261,38 +262,38 @@ def load_examples(a):
 # you will want to use tf.concat to combine them together.
 
         else:
-            path_queue = tf.train.slice_input_producer([a_names, b_names], shuffle=a["mode"] == "train")
+            path_queue = tf.train.slice_input_producer([a_names, b_names], shuffle=args["mode"] == "train")
             paths = path_queue
 
             a_path = tf.decode_raw(path_queue[0], tf.uint8)
             a_contents = tf.read_file(path_queue[0])
-            raw_input_a = decode(a_contents, channels=3)
+            raw_input_a = decode(a_contents, channels=args["channels"])
             raw_input_a = tf.image.convert_image_dtype(raw_input_a, dtype=tf.float32)
 
-            assertion = tf.assert_equal(tf.shape(raw_input_a)[2], 3, message="image {0} does not have 3 channels".format(a_path))
+            assertion = tf.assert_equal(tf.shape(raw_input_a)[2], args["channels"], message="image %s does not have %d channels" % (a_path, args["channels"]))
             with tf.control_dependencies([assertion]):
                 raw_input_a = tf.identity(raw_input_a)
 
-            raw_input_a.set_shape([None, None, 3])
+            raw_input_a.set_shape([None, None, args["channels"]])
 
             b_path = tf.decode_raw(path_queue[1], tf.uint8)
             b_contents = tf.read_file(path_queue[1])
-            raw_input_b = decode(b_contents, channels=3)
+            raw_input_b = decode(b_contents, channels=args["channels"])
             raw_input_b = tf.image.convert_image_dtype(raw_input_b, dtype=tf.float32)            
 
-            assertion = tf.assert_equal(tf.shape(raw_input_b)[2], 3, message="image {0} does not have 3 channels".format(b_path))
+            assertion = tf.assert_equal(tf.shape(raw_input_b)[2], args["channels"], message="image %s does not have %d channels" % (b_path, args["channels"]))
             with tf.control_dependencies([assertion]):
                 raw_input_b = tf.identity(raw_input_b)
 
-            raw_input_b.set_shape([None, None, 3])
+            raw_input_b.set_shape([None, None, args["channels"]])
 
             a_images = pix2pix_model.preprocess(raw_input_a)
             b_images = pix2pix_model.preprocess(raw_input_b)
     
 
-    if a["which_direction"] == "AtoB":
+    if args["which_direction"] == "AtoB":
         inputs, targets = [a_images, b_images]
-    elif a["which_direction"] == "BtoA":
+    elif args["which_direction"] == "BtoA":
         inputs, targets = [b_images, a_images]
     else:
         raise Exception("invalid direction")
@@ -302,17 +303,17 @@ def load_examples(a):
     seed = random.randint(0, 2**31 - 1)
     def transform(image):
         r = image
-        if a["flip"]:
+        if args["flip"]:
             r = tf.image.random_flip_left_right(r, seed=seed)
 
         # area produces a nice downscaling, but does nearest neighbor for upscaling
         # assume we're going to be doing downscaling here
-        r = tf.image.resize_images(r, [a["scale_size"], a["scale_size"]], method=tf.image.ResizeMethod.AREA)
+        r = tf.image.resize_images(r, [args["scale_size"], args["scale_size"]], method=tf.image.ResizeMethod.AREA)
 
-        offset = tf.cast(tf.floor(tf.random_uniform([2], 0, a["scale_size"] - a["crop_size"] + 1, seed=seed)), dtype=tf.int32)
-        if a["scale_size"] > a["crop_size"]:
-            r = tf.image.crop_to_bounding_box(r, offset[0], offset[1], a["crop_size"], a["crop_size"])
-        elif a["scale_size"] < a["crop_size"]:
+        offset = tf.cast(tf.floor(tf.random_uniform([2], 0, args["scale_size"] - args["crop_size"] + 1, seed=seed)), dtype=tf.int32)
+        if args["scale_size"] > args["crop_size"]:
+            r = tf.image.crop_to_bounding_box(r, offset[0], offset[1], args["crop_size"], args["crop_size"])
+        elif args["scale_size"] < args["crop_size"]:
             raise Exception("scale size cannot be less than crop size")
         return r
 
@@ -322,8 +323,8 @@ def load_examples(a):
     with tf.name_scope("target_images"):
         target_images = transform(targets)
 
-    paths_batch, inputs_batch, targets_batch = tf.train.batch([paths, input_images, target_images], batch_size=a["batch_size"])
-    steps_per_epoch = int(math.ceil(num_images / a["batch_size"]))
+    paths_batch, inputs_batch, targets_batch = tf.train.batch([paths, input_images, target_images], batch_size=args["batch_size"])
+    steps_per_epoch = int(math.ceil(num_images / args["batch_size"]))
 
     return Examples(
         paths=paths_batch,
@@ -380,124 +381,50 @@ def append_index(filesets, output_dir, step=False):
         index.write("</tr>")
     return index_path
 
-# python pix2pix.py \
-# --mode pixelPerfect \
-# --input_dir ~/datasets/CamVidAB/train \
-# --output_dir CamVidAB_pixelPerfect \
-# --which_direction AtoB \
-# --checkpoint=CamVidAB_train
-
-def pixelPerfect(fetches, output_dir, src_contribution=0.5, dest_channel=2):
-# 1) run training images in test mode:
-# python pix2pix.py 
-# --mode test 
-# --output_dir CamVidAB_test 
-# --max_epochs 200 
-# --input_dir ~/datasets/CamVidAB/train 
-# --which_direction AtoB 
-# --checkpoint=CamVidAB_train
-#
-# 2) Build A/B image from target and output
-# 3) retrain!
-    image_dir = output_dir
-    if not os.path.exists(image_dir):
-        os.makedirs(image_dir)
-
-    filesets = []
-    for i, in_path in enumerate(fetches["paths"]):
-        name, _ = os.path.splitext(os.path.basename(in_path.decode("utf8")))
-        fileset = {"name": name, "step": None}
-
-        images = {}
-        for kind in ["inputs", "outputs", "targets"]:
-            contents = fetches[kind][i]
-            with io.BytesIO(kind) as f:
-                f.write(contents)
-                images[kind] = misc.imread(f)
-
-        a_image = images["outputs"]
-        b_image = images["targets"]
-
-        if src_contribution > 0.0:
-            a_image = cv2.cvtColor(a_image, cv2.COLOR_RGB2HSV)
-            src_intensity = cv2.cvtColor(images["inputs"], cv2.COLOR_RGB2GRAY)
-
-            edges = cv2.Canny(src_intensity,100,80)
-
-            a_image[:,:,dest_channel] = cv2.addWeighted(a_image[:,:,dest_channel],1.0-src_contribution,edges,src_contribution,0)
-            a_image = cv2.cvtColor(a_image, cv2.COLOR_HSV2RGB)
-
-        ha,wa = a_image.shape[:2]
-        
-        total_width = 2 * wa
-        combined_img = np.zeros(shape=(ha, total_width, 3)) 
-
-        combined_img[:ha,:wa]=a_image
-        combined_img[:ha,wa:total_width]=b_image
-
-        print(name)
-        combined_img_path = os.path.join(image_dir, name + ".png")
-        misc.imsave(combined_img_path, combined_img)
-
-        return filesets
-
-    return filesets
-
-    # start = time.time()
-    # max_steps = min(examples.steps_per_epoch, max_steps)
-    # for step in range(max_steps):
-    #     results = sess.run(display_fetches)
-    #     filesets = save_images(results)
-    #     for i, f in enumerate(filesets):
-    #         print("evaluated image", f["name"])
-    #     index_path = append_index(filesets)
-    # print("wrote index at", index_path)
-    # print("rate", (time.time() - start) / max_steps)
-
 @ex.automain
 @LogFileWriter(ex)
-def main(a, _seed):
-    print("Args:", a)
+def main(args, _seed):
+    print("\n\npython pix2pix.py with \"args =", args, "\"\n")
 
-    if a["scale_size"] == 0:
-        a["scale_size"] = a["crop_size"]
+    if args["scale_size"] == 0:
+        args["scale_size"] = args["crop_size"]
 
-    print("Image flipping is turned", ('ON' if a["flip"] else 'OFF'))
+    print("Image flipping is turned", ('ON' if args["flip"] else 'OFF'))
 
     tf.set_random_seed(_seed)
     np.random.seed(_seed)
     random.seed(_seed)
 
-    if not os.path.exists(a["output_dir"]):
-        os.makedirs(a["output_dir"])
+    if not os.path.exists(args["output_dir"]):
+        os.makedirs(args["output_dir"])
 
-    if a["mode"] == "test" or a["mode"] == "export" or a["mode"] == "deploy" or a["mode"] == "pixelPerfect":
-        if a["checkpoint"] is None:
-            raise Exception("checkpoint required for mode: " + a["mode"])
+    if args["mode"] == "test" or args["mode"] == "export" or args["mode"] == "deploy":
+        if args["checkpoint"] is None:
+            raise Exception("checkpoint required for mode: " + args["mode"])
 
         # load some options from the checkpoint
-        options = {"which_direction", "ngf", "ndf", "lab_colorization", "angle_output"}
-        with open(os.path.join(a["checkpoint"], "options.json")) as f:
+        options = {"which_direction", "ngf", "ndf", "lab_colorization", "crop_size", "channels", "angle_output"}
+        with open(os.path.join(args["checkpoint"], "options.json")) as f:
             for key, val in json.loads(f.read()).items():
                 if key in options:
                     print("loaded", key, "=", val)
-                    a[key] = val
+                    args[key] = val
         # disable these features in test mode
-        a["scale_size"] = a["crop_size"]
-        a["flip"] = False
+        args["scale_size"] = args["crop_size"]
+        args["flip"] = False
 
-    if a["mode"] != "pixelPerfect" and a["mode"] != "deploy":
-        with open(os.path.join(a["output_dir"], "options.json"), "w") as f:
-            f.write(json.dumps(a, sort_keys=True, indent=4))
+    if args["mode"] != "deploy":
+        with open(os.path.join(args["output_dir"], "options.json"), "w") as f:
+            f.write(json.dumps(args, sort_keys=True, indent=4))
 
-    if a["mode"] == "export":
+    if args["mode"] == "export":
         # export the generator to a meta graph that can be imported later for standalone generation
-        shape = [a["crop_size"], a["crop_size"], 3]
+        shape = [args["crop_size"], args["crop_size"], args["channels"]]
         input_image = tf.placeholder(dtype=tf.float32, shape=shape, name='input')
         batch_input = tf.expand_dims(input_image, axis=0)
 
         with tf.variable_scope("generator"):
-            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(a, pix2pix_model.preprocess(batch_input), 3))
+            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(args, pix2pix_model.preprocess(batch_input), args["channels"]))
 
         # output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
         # output_image = tf.identity(output_image, name='output')
@@ -520,16 +447,16 @@ def main(a, _seed):
             sess.run(init_op)
 
             print("##############################################################\n")
-            print("\nLoading model from checkpoint")
-            checkpoint = tf.train.latest_checkpoint(a["checkpoint"])
+            print("\nLoading model from checkpoint %s" % args["checkpoint"])
+            checkpoint = tf.train.latest_checkpoint(args["checkpoint"])
             restore_saver.restore(sess, checkpoint)
             
             # Save the model
             inputs = {'input': batch_input}
             outputs = {'output': batch_output}
 
-            shutil.rmtree(a["output_dir"])
-            tf.saved_model.simple_save(sess, a["output_dir"], inputs, outputs)
+            shutil.rmtree(args["output_dir"])
+            tf.saved_model.simple_save(sess, args["output_dir"], inputs, outputs)
 
             print("Finished: %d ops in the final graph." % len(tf.get_default_graph().as_graph_def().node))
             print("##############################################################\n") 
@@ -538,14 +465,14 @@ def main(a, _seed):
 
         return
 
-    if a["mode"] == "deploy":
+    if args["mode"] == "deploy":
         # export the generator to a meta graph that can be imported later for standalone generation
-        shape = [a["crop_size"], a["crop_size"], 3]
+        shape = [args["crop_size"], args["crop_size"], args["channels"]]
         input_image = tf.placeholder(dtype=tf.float32, shape=shape, name='input')
         batch_input = tf.expand_dims(input_image, axis=0)
 
         with tf.variable_scope("generator"):
-            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(a, pix2pix_model.preprocess(batch_input), 3))
+            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(args, pix2pix_model.preprocess(batch_input), args["channels"]))
 
         # output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
         # output_image = tf.identity(output_image, name='output')
@@ -571,15 +498,15 @@ def main(a, _seed):
 
             print("##############################################################\n")
             print("\nLoading model from checkpoint")
-            checkpoint = tf.train.latest_checkpoint(a["checkpoint"])
+            checkpoint = tf.train.latest_checkpoint(args["checkpoint"])
             restore_saver.restore(sess, checkpoint)
             
             print("\nDeploying model, has %d ops" % len(tf.get_default_graph().as_graph_def().node))
             output_graph_def = graph_util.convert_variables_to_constants(sess, tf.get_default_graph().as_graph_def(), [output_name])
 
-            if not a["transform_ops"] is None:
+            if not args["transform_ops"] is None:
                 print("\nStripping model and quantizing, has %d ops" % len(output_graph_def.node))
-                transforms = a["transform_ops"].split(',')
+                transforms = args["transform_ops"].split(',')
                 output_graph_def = TransformGraph(output_graph_def, [input_name], [output_name], transforms)
 
             #print("\n##### Optimizing model:") #issue: Didn't find expected Conv2D input to 'generator/encoder_2/batch_normalization/FusedBatchNorm'
@@ -587,13 +514,13 @@ def main(a, _seed):
 
             print("\nOutputting model in binary format, %d ops" % len(output_graph_def.node))
 
-            path = os.path.join(a["output_dir"], a["deploy_name"])
+            path = os.path.join(args["output_dir"], args["deploy_name"])
             with tf.gfile.GFile(path, "wb") as f:
                 f.write(output_graph_def.SerializeToString())
 
             print("\nCreating selective registration header", path)
             
-            with open(os.path.join(a["output_dir"], a["deploy_name"] + ".h"), "w") as f:
+            with open(os.path.join(args["output_dir"], args["deploy_name"] + ".h"), "w") as f:
                 header_str = selective_registration_header_lib.get_header([path], 'rawproto', 'NoOp:NoOp,_Recv:RecvOp,_Send:SendOp')
                 f.write(header_str)
 
@@ -619,7 +546,7 @@ def main(a, _seed):
     print("examples count = %d" % examples.count)
 
     # inputs and targets are [batch_size, height, width, channels]
-    model = pix2pix_model.create_model(a, examples.inputs, examples.targets, EPS)
+    model = pix2pix_model.create_model(args, examples.inputs, examples.targets, EPS)
 
     # undo colorization splitting on images that we use for display/output
     inputs = pix2pix_model.deprocess(examples.inputs)
@@ -627,9 +554,9 @@ def main(a, _seed):
     outputs = pix2pix_model.deprocess(model.outputs)
 
     def convert(image):
-        if a["aspect_ratio"] != 1.0:
+        if args["aspect_ratio"] != 1.0:
             # upscale to correct aspect ratio
-            size = [a["crop_size"], int(round(a["crop_size"] * a["aspect_ratio"]))]
+            size = [args["crop_size"], int(round(args["crop_size"] * args["aspect_ratio"]))]
             image = tf.image.resize_images(image, size=size, method=tf.image.ResizeMethod.BICUBIC)
 
         return tf.image.convert_image_dtype(image, dtype=tf.uint8, saturate=True)
@@ -672,7 +599,7 @@ def main(a, _seed):
     tf.summary.scalar("generator_loss_GAN", model.gen_loss_GAN)
     tf.summary.scalar("generator_loss_L1", model.gen_loss_L1)
 
-    if a["gan_loss"] == "wgan":
+    if args["gan_loss"] == "wgan":
         tf.summary.scalar("wgan_d_plus_g", model.discrim_loss + model.gen_loss_GAN)
 
     if model.gradient_penalty is not None:
@@ -689,50 +616,35 @@ def main(a, _seed):
 
     saver = tf.train.Saver(max_to_keep=1)
 
-    logdir = None
-    if a["mode"] != "pixelPerfect":
-        logdir = a["output_dir"] if (a["trace_freq"] > 0 or a["summary_freq"] > 0) else None
+    logdir = args["output_dir"] if (args["trace_freq"] > 0 or args["summary_freq"] > 0) else None
     sv = tf.train.Supervisor(logdir=logdir, save_summaries_secs=0, saver=None)
     with sv.managed_session() as sess:
         print("parameter_count =", sess.run(parameter_count))
 
-        if a["checkpoint"] is not None:
+        if args["checkpoint"] is not None:
             print("loading model from checkpoint")
-            checkpoint = tf.train.latest_checkpoint(a["checkpoint"])
+            checkpoint = tf.train.latest_checkpoint(args["checkpoint"])
             saver.restore(sess, checkpoint)
 
         max_steps = 2**32
-        if a["max_epochs"] is not None:
-            max_steps = examples.steps_per_epoch * a["max_epochs"]
-        if a["max_steps"] is not None:
-            max_steps = a["max_steps"]
+        if args["max_epochs"] is not None:
+            max_steps = examples.steps_per_epoch * args["max_epochs"]
+        if args["max_steps"] is not None:
+            max_steps = args["max_steps"]
 
-        if a["mode"] == "test":
+        if args["mode"] == "test":
             # testing
             # at most, process the test data once
             start = time.time()
             max_steps = min(examples.steps_per_epoch, max_steps)
             for step in range(max_steps):
                 results = sess.run(display_fetches)
-                filesets = save_images(results, a["output_dir"])
+                filesets = save_images(results, args["output_dir"])
                 for i, f in enumerate(filesets):
                     print("evaluated image", f["name"])
-                index_path = append_index(filesets, a["output_dir"])
+                index_path = append_index(filesets, args["output_dir"])
             print("wrote index at", index_path)
             print("rate", (time.time() - start) / max_steps)
-        elif a["mode"] == "pixelPerfect":
-            # testing
-            # at most, process the test data once
-            start = time.time()
-            max_steps = min(examples.steps_per_epoch, max_steps)
-            for step in range(max_steps):
-                results = sess.run(display_fetches)
-
-                filesets = pixelPerfect(results, a["output_dir"])
-
-                for i, f in enumerate(filesets):
-                    print("Converted image", f["name"])
-
         else:
             # training
             start = time.time()
@@ -743,7 +655,7 @@ def main(a, _seed):
 
                 options = None
                 run_metadata = None
-                if should(a["trace_freq"]):
+                if should(args["trace_freq"]):
                     options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
                     run_metadata = tf.RunMetadata()
 
@@ -752,46 +664,46 @@ def main(a, _seed):
                     "global_step": sv.global_step,
                 }
 
-                if should(a["progress_freq"]):
+                if should(args["progress_freq"]):
                     fetches["discrim_loss"] = model.discrim_loss
                     fetches["gen_loss_GAN"] = model.gen_loss_GAN
                     fetches["gen_loss_L1"] = model.gen_loss_L1
 
-                if should(a["summary_freq"]):
+                if should(args["summary_freq"]):
                     fetches["summary"] = sv.summary_op
 
-                if should(a["display_freq"]):
+                if should(args["display_freq"]):
                     fetches["display"] = display_fetches
 
                 results = sess.run(fetches, options=options, run_metadata=run_metadata)
 
-                if should(a["summary_freq"]):
+                if should(args["summary_freq"]):
                     print("recording summary")
                     sv.summary_writer.add_summary(results["summary"], results["global_step"])
 
-                if should(a["display_freq"]):
+                if should(args["display_freq"]):
                     print("saving display images")
-                    filesets = save_images(results["display"], a["output_dir"], step=results["global_step"])
-                    append_index(filesets, a["output_dir"], step=True)
+                    filesets = save_images(results["display"], args["output_dir"], step=results["global_step"])
+                    append_index(filesets, args["output_dir"], step=True)
 
-                if should(a["trace_freq"]):
+                if should(args["trace_freq"]):
                     print("recording trace")
                     sv.summary_writer.add_run_metadata(run_metadata, "step_%d" % results["global_step"])
 
-                if should(a["progress_freq"]):
+                if should(args["progress_freq"]):
                     # global_step will have the correct step count if we resume from a checkpoint
                     train_epoch = math.ceil(results["global_step"] / examples.steps_per_epoch)
                     train_step = (results["global_step"] - 1) % examples.steps_per_epoch + 1
-                    rate = (step + 1) * a["batch_size"] / (time.time() - start)
-                    remaining = (max_steps - step) * a["batch_size"] / rate
+                    rate = (step + 1) * args["batch_size"] / (time.time() - start)
+                    remaining = (max_steps - step) * args["batch_size"] / rate
                     print("progress  epoch %d  step %d  image/sec %0.1f  remaining %dm" % (train_epoch, train_step, rate, remaining / 60))
                     print("discrim_loss", results["discrim_loss"])
                     print("gen_loss_GAN", results["gen_loss_GAN"])
                     print("gen_loss_L1", results["gen_loss_L1"])
 
-                if should(a["save_freq"]):
+                if should(args["save_freq"]):
                     print("saving model")
-                    saver.save(sess, os.path.join(a["output_dir"], "model"), global_step=sv.global_step)
+                    saver.save(sess, os.path.join(args["output_dir"], "model"), global_step=sv.global_step)
 
                 if sv.should_stop():
                     break
