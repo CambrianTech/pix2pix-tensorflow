@@ -43,19 +43,23 @@ ex = Experiment("pix2pix")
 # Exporting for feed forward
 # python pix2pix.py with "args = {'mode': 'export', 'checkpoint':'/Users/joelteply/Desktop/normals_pix2pix'}"
 
+
+#python pix2pix.py with "args = {'mode':'train', 'a_input_dir':'/Users/joelteply/Desktop/office_home_elevation', 'a_match_exp':'*_C.png', 'b_input_dir':'/Users/joelteply/Desktop/office_home_elevation', 'b_match_exp':'*_E.png', 'b_channels':1}"
+
+
 @ex.config
 def pix2pix_config():
     args = {
-        "combined_input_dir": None,
-        "combined_match_exp": None,
-        "input_channels": 3,
-        "output_channels": 3,
+        "ab_input_dir": None,
+        "ab_match_exp": None,
 
         "a_input_dir": None,
         "a_match_exp": None,
+        "a_channels": "3",
 
         "b_input_dir": None,
         "b_match_exp": None,
+        "b_channels": "3",
 
         "filter_categories": None,
         "mode": "train",
@@ -113,8 +117,8 @@ def load_examples(args):
     combined_names = []
     num_images = 0
 
-    input_channels = args["input_channels"]
-    output_channels = args["output_channels"]
+    input_channels = [int(x) for x in args["a_channels"].split(',')]
+    output_channels = [int(x) for x in args["b_channels"].split(',')]
 
     if not args["a_input_dir"] is None or not args["a_match_exp"] is None:
         a_input_dirs = args["a_input_dir"].split(",")
@@ -153,12 +157,12 @@ def load_examples(args):
 
         if not a_names is None:
             num_images = len(a_names[0])
-    elif not args["combined_input_dir"] is None:
-        combined_names = utils.get_image_paths(args["combined_input_dir"], args["combined_match_exp"])
+    elif not args["ab_input_dir"] is None:
+        combined_names = utils.get_image_paths(args["ab_input_dir"], args["ab_match_exp"])
         if not combined_names is None:
             num_images = len(combined_names)
     else:
-        raise Exception("combined_input_dir or a_input_dir/b_input_dir required")
+        raise Exception("ab_input_dir or a_input_dir/b_input_dir required")
 
     if num_images == 0:
         raise Exception("No images found at input path")
@@ -178,10 +182,10 @@ def load_examples(args):
             reader = tf.WholeFileReader()
             paths, contents = reader.read(path_queue)
             
-            raw_input = tf.image.decode_image(contents, channels=input_channels)
+            raw_input = tf.image.decode_image(contents, channels=input_channels[0])
             raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
 
-            raw_input.set_shape([None, None, input_channels])
+            raw_input.set_shape([None, None, input_channels[0]])
 
             # break apart image pair and move to range [-1, 1]
             width = tf.shape(raw_input)[1] # [height, width, channels]
@@ -206,18 +210,26 @@ def load_examples(args):
 
             images = []
 
+            i = 0
             for path_queue in path_queues:
                 path = tf.decode_raw(path_queue, tf.uint8)
                 contents = tf.read_file(path_queue)
-                raw_input = tf.image.decode_image(contents, channels=input_channels)
+
+                if i < len(input_channels):
+                    num_channels = input_channels[0] if len(input_channels) == 1 else input_channels[i]
+                else:
+                    num_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
+
+                raw_input = tf.image.decode_image(contents, channels=num_channels)
                 raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
-                raw_input.set_shape([None, None, input_channels])
+                raw_input.set_shape([None, None, num_channels])
                 raw_input = pix2pix_model.preprocess(raw_input)
 
                 # Resize here instead of later since we need to concat
                 raw_input = tf.image.resize_images(raw_input, (args["scale_size"], args["scale_size"]), method=tf.image.ResizeMethod.AREA)
 
                 images.append(raw_input)
+                i += 1
 
             assert len(images) == a_paths_count + b_paths_count
 
@@ -326,8 +338,8 @@ def main(args, _seed):
     if args["scale_size"] == 0:
         args["scale_size"] = args["crop_size"]
 
-    input_channels = args["input_channels"]
-    output_channels = args["output_channels"]
+    input_channels = args["a_channels"]
+    output_channels = args["b_channels"]
 
     print("Image flipping is turned", ('ON' if args["flip"] else 'OFF'))
 
@@ -343,7 +355,7 @@ def main(args, _seed):
             raise Exception("checkpoint required for mode: " + args["mode"])
 
         # load some options from the checkpoint
-        options = {"which_direction", "ngf", "ndf", "lab_colorization", "crop_size", "input_channels", "output_channels"}
+        options = {"which_direction", "ngf", "ndf", "lab_colorization", "crop_size", "a_channels", "b_channels"}
         with open(os.path.join(args["checkpoint"], "options.json")) as f:
             for key, val in json.loads(f.read()).items():
                 if key in options:
@@ -522,25 +534,28 @@ def main(args, _seed):
         if args["a_input_dir"] is not None:
             a_input_dir_count = len(args["a_input_dir"].split(","))
             for i in range(a_input_dir_count):
-                tf.summary.image("inputs_%d" % i, converted_inputs[:, :, :, i*input_channels:(i+1)*input_channels])
+                i_channels = int(input_channels[0] if len(input_channels) == 1 else input_channels[i])
+                tf.summary.image("inputs_%d" % i, converted_inputs[:, :, :, i*i_channels:(i+1)*i_channels])
         else:
-            tf.summary.image("inputs", converted_inputs[:, :, :, :input_channels])
+            tf.summary.image("inputs", converted_inputs[:, :, :, :int(input_channels[0])])
 
     with tf.name_scope("targets_summary"):
         if args["b_input_dir"] is not None:
             b_input_dir_count = len(args["b_input_dir"].split(","))
             for i in range(b_input_dir_count):
-                tf.summary.image("targets_%d" % i, converted_targets[:, :, :, i*output_channels:(i+1)*output_channels])
+                o_channels = int(output_channels[0] if len(output_channels) == 1 else output_channels[i])
+                tf.summary.image("targets_%d" % i, converted_targets[:, :, :, i*o_channels:(i+1)*o_channels])
         else:
-            tf.summary.image("targets", converted_targets[:, :, :, :output_channels])
+            tf.summary.image("targets", converted_targets[:, :, :, :int(output_channels[0])])
 
     with tf.name_scope("outputs_summary"):
         if args["b_input_dir"] is not None:
             b_input_dir_count = len(args["b_input_dir"].split(","))
             for i in range(b_input_dir_count):
-                tf.summary.image("outputs_%d" % i, converted_outputs[:, :, :, i*output_channels:(i+1)*output_channels])
+                o_channels = int(output_channels[0] if len(output_channels) == 1 else output_channels[i])
+                tf.summary.image("outputs_%d" % i, converted_outputs[:, :, :, i*o_channels:(i+1)*o_channels])
         else:
-            tf.summary.image("outputs", converted_outputs[:, :, :, :output_channels])
+            tf.summary.image("outputs", converted_outputs[:, :, :, :int(output_channels[0])])
 
     with tf.name_scope("predict_real_summary"):
         tf.summary.image("predict_real", tf.image.convert_image_dtype(model.predict_real, dtype=tf.uint8))
