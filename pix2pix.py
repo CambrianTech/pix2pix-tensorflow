@@ -44,8 +44,7 @@ ex = Experiment("pix2pix")
 # python pix2pix.py with "args = {'mode': 'export', 'checkpoint':'/Users/joelteply/Desktop/normals_pix2pix'}"
 
 
-#python pix2pix.py with "args = {'mode':'train', 'a_input_dir':'/Users/joelteply/Desktop/office_home_elevation', 'a_match_exp':'*_C.png', 'b_input_dir':'/Users/joelteply/Desktop/office_home_elevation', 'b_match_exp':'*_E.png', 'b_channels':1}"
-
+# python pix2pix.py with "args = {'mode':'train', 'a_input_dir':'/Users/joelteply/Desktop/office_home_elevation', 'a_match_exp':'*_C.png', 'b_input_dir':'/Users/joelteply/Desktop/office_home_elevation', 'b_match_exp':'*_N.png,*_E.png', 'b_channels':'3,1'}"
 
 @ex.config
 def pix2pix_config():
@@ -120,6 +119,7 @@ def load_examples(args):
     input_channels = [int(x) for x in args["a_channels"].split(',')]
     output_channels = [int(x) for x in args["b_channels"].split(',')]
 
+
     if not args["a_input_dir"] is None or not args["a_match_exp"] is None:
         a_input_dirs = args["a_input_dir"].split(",")
         b_input_dirs = args["b_input_dir"].split(",")
@@ -132,6 +132,14 @@ def load_examples(args):
             b_match_exps = args["b_match_exp"].split(",")
         else:
             b_match_exps = None
+
+        if len(a_input_dirs) == 1 and len(a_match_exps) > 1:
+            for i in range(1, len(a_match_exps)):
+                a_input_dirs.append(a_input_dirs[0])
+
+        if len(b_input_dirs) == 1 and len(b_match_exps) > 1:
+            for i in range(1, len(b_match_exps)):
+                b_input_dirs.append(b_input_dirs[0])
 
         assert a_match_exps is None or len(a_input_dirs) == len(a_match_exps)
         assert b_match_exps is None or len(b_input_dirs) == len(b_match_exps)
@@ -218,7 +226,7 @@ def load_examples(args):
                 if i < len(input_channels):
                     num_channels = input_channels[0] if len(input_channels) == 1 else input_channels[i]
                 else:
-                    num_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
+                    num_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i-a_paths_count]
 
                 raw_input = tf.image.decode_image(contents, channels=num_channels)
                 raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
