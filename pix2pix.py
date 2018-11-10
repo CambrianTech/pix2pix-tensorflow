@@ -119,7 +119,6 @@ def load_examples(args):
     input_channels = [int(x) for x in args["a_channels"].split(',')]
     output_channels = [int(x) for x in args["b_channels"].split(',')]
 
-
     if not args["a_input_dir"] is None or not args["a_match_exp"] is None:
         a_input_dirs = args["a_input_dir"].split(",")
         b_input_dirs = args["b_input_dir"].split(",")
@@ -346,8 +345,8 @@ def main(args, _seed):
     if args["scale_size"] == 0:
         args["scale_size"] = args["crop_size"]
 
-    input_channels = args["a_channels"]
-    output_channels = args["b_channels"]
+    input_channels = [int(x) for x in args["a_channels"].split(',')]
+    output_channels = [int(x) for x in args["b_channels"].split(',')]
 
     print("Image flipping is turned", ('ON' if args["flip"] else 'OFF'))
 
@@ -540,27 +539,27 @@ def main(args, _seed):
     # summaries
     with tf.name_scope("inputs_summary"):
         if args["a_input_dir"] is not None:
-            a_input_dir_count = len(args["a_input_dir"].split(","))
+            a_input_dir_count = max(len(args["a_input_dir"].split(",")),len(args["a_match_exp"].split(",")))
             for i in range(a_input_dir_count):
-                i_channels = int(input_channels[0] if len(input_channels) == 1 else input_channels[i])
+                i_channels = input_channels[0] if len(input_channels) == 1 else input_channels[i]
                 tf.summary.image("inputs_%d" % i, converted_inputs[:, :, :, i*i_channels:(i+1)*i_channels])
         else:
             tf.summary.image("inputs", converted_inputs[:, :, :, :int(input_channels[0])])
 
     with tf.name_scope("targets_summary"):
         if args["b_input_dir"] is not None:
-            b_input_dir_count = len(args["b_input_dir"].split(","))
+            b_input_dir_count = max(len(args["b_input_dir"].split(",")),len(args["b_match_exp"].split(",")))
             for i in range(b_input_dir_count):
-                o_channels = int(output_channels[0] if len(output_channels) == 1 else output_channels[i])
+                o_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
                 tf.summary.image("targets_%d" % i, converted_targets[:, :, :, i*o_channels:(i+1)*o_channels])
         else:
             tf.summary.image("targets", converted_targets[:, :, :, :int(output_channels[0])])
 
     with tf.name_scope("outputs_summary"):
         if args["b_input_dir"] is not None:
-            b_input_dir_count = len(args["b_input_dir"].split(","))
+            b_input_dir_count = max(len(args["b_input_dir"].split(",")),len(args["b_match_exp"].split(",")))
             for i in range(b_input_dir_count):
-                o_channels = int(output_channels[0] if len(output_channels) == 1 else output_channels[i])
+                o_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
                 tf.summary.image("outputs_%d" % i, converted_outputs[:, :, :, i*o_channels:(i+1)*o_channels])
         else:
             tf.summary.image("outputs", converted_outputs[:, :, :, :int(output_channels[0])])
