@@ -218,7 +218,6 @@ def load_examples(args):
             images = []
 
             for i, path_queue in enumerate(path_queues):
-                path = tf.decode_raw(path_queue, tf.uint8)
                 contents = tf.read_file(path_queue)
 
                 if i < len(input_channels):
