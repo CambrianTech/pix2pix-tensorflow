@@ -341,10 +341,7 @@ def main(args, _seed):
 
     if args["scale_size"] == 0:
         args["scale_size"] = args["crop_size"]
-
-    input_channels = [int(x) for x in args["a_channels"].split(',')]
-    output_channels = [int(x) for x in args["b_channels"].split(',')]
-
+    
     print("Image flipping is turned", ('ON' if args["flip"] else 'OFF'))
 
     tf.set_random_seed(_seed)
@@ -369,18 +366,26 @@ def main(args, _seed):
         args["scale_size"] = args["crop_size"]
         args["flip"] = False
 
+    # Count input and output channels after we loaded the options
+    input_channels = [int(x) for x in args["a_channels"].split(',')]
+    output_channels = [int(x) for x in args["b_channels"].split(',')]
+    num_input_channels = sum(input_channels)
+    num_output_channels = sum(output_channels)
+    print("Num input channels:", num_input_channels)
+    print("Num output channels:", num_output_channels)
+
     if args["mode"] != "deploy":
         with open(os.path.join(args["output_dir"], "options.json"), "w") as f:
             f.write(json.dumps(args, sort_keys=True, indent=4))
 
     if args["mode"] == "export":
         # export the generator to a meta graph that can be imported later for standalone generation
-        shape = [args["crop_size"], args["crop_size"], input_channels]
+        shape = [args["crop_size"], args["crop_size"], num_input_channels]
         input_image = tf.placeholder(dtype=tf.float32, shape=shape, name='input')
         batch_input = tf.expand_dims(input_image, axis=0)
 
         with tf.variable_scope("generator"):
-            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(args, pix2pix_model.preprocess(batch_input), output_channels))
+            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(args, pix2pix_model.preprocess(batch_input), num_output_channels))
 
         # output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
         # output_image = tf.identity(output_image, name='output')
@@ -421,12 +426,12 @@ def main(args, _seed):
 
     if args["mode"] == "deploy":
         # export the generator to a meta graph that can be imported later for standalone generation
-        shape = [args["crop_size"], args["crop_size"], input_channels]
+        shape = [args["crop_size"], args["crop_size"], num_input_channels]
         input_image = tf.placeholder(dtype=tf.float32, shape=shape, name='input')
         batch_input = tf.expand_dims(input_image, axis=0)
 
         with tf.variable_scope("generator"):
-            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(args, pix2pix_model.preprocess(batch_input), input_channels))
+            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(args, pix2pix_model.preprocess(batch_input), num_input_channels))
 
         # output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
         # output_image = tf.identity(output_image, name='output')
