@@ -213,7 +213,7 @@ def load_examples(args):
             a_paths_count = len(a_names)
             b_paths_count = len(b_names)
 
-            paths = [path_queues[0], path_queues[a_paths_count]]
+            paths = path_queues
 
             images = []
 
