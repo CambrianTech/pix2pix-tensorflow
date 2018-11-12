@@ -217,8 +217,7 @@ def load_examples(args):
 
             images = []
 
-            i = 0
-            for path_queue in path_queues:
+            for i, path_queue in enumerate(path_queues):
                 path = tf.decode_raw(path_queue, tf.uint8)
                 contents = tf.read_file(path_queue)
 
@@ -236,7 +235,6 @@ def load_examples(args):
                 raw_input = tf.image.resize_images(raw_input, (args["scale_size"], args["scale_size"]), method=tf.image.ResizeMethod.AREA)
 
                 images.append(raw_input)
-                i += 1
 
             assert len(images) == a_paths_count + b_paths_count
 
