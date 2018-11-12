@@ -542,27 +542,33 @@ def main(args, _seed):
     with tf.name_scope("inputs_summary"):
         if args["a_input_dir"] is not None:
             a_input_dir_count = max(len(args["a_input_dir"].split(",")),len(args["a_match_exp"].split(",")))
+            channel_index = 0
             for i in range(a_input_dir_count):
                 i_channels = input_channels[0] if len(input_channels) == 1 else input_channels[i]
-                tf.summary.image("inputs_%d" % i, converted_inputs[:, :, :, i*i_channels:(i+1)*i_channels])
+                tf.summary.image("inputs_%d" % i, converted_inputs[:, :, :, channel_index:channel_index+i_channels])
+                channel_index += i_channels
         else:
             tf.summary.image("inputs", converted_inputs[:, :, :, :int(input_channels[0])])
 
     with tf.name_scope("targets_summary"):
         if args["b_input_dir"] is not None:
             b_input_dir_count = max(len(args["b_input_dir"].split(",")),len(args["b_match_exp"].split(",")))
+            channel_index = 0
             for i in range(b_input_dir_count):
                 o_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
-                tf.summary.image("targets_%d" % i, converted_targets[:, :, :, i*o_channels:(i+1)*o_channels])
+                tf.summary.image("targets_%d" % i, converted_targets[:, :, :, channel_index:channel_index+o_channels])
+                channel_index += o_channels
         else:
             tf.summary.image("targets", converted_targets[:, :, :, :int(output_channels[0])])
 
     with tf.name_scope("outputs_summary"):
         if args["b_input_dir"] is not None:
             b_input_dir_count = max(len(args["b_input_dir"].split(",")),len(args["b_match_exp"].split(",")))
+            channel_index = 0
             for i in range(b_input_dir_count):
                 o_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
-                tf.summary.image("outputs_%d" % i, converted_outputs[:, :, :, i*o_channels:(i+1)*o_channels])
+                tf.summary.image("outputs_%d" % i, converted_outputs[:, :, :, channel_index:channel_index+o_channels])
+                channel_index += o_channels
         else:
             tf.summary.image("outputs", converted_outputs[:, :, :, :int(output_channels[0])])
 
