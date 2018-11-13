@@ -103,6 +103,7 @@ def pix2pix_config():
         "gan_loss": "gan",
         "gp_weight": 0,
         "init_stddev": 0.02,
+        "angle_output": False,
     }
 
 EPS = 1e-12
@@ -356,7 +357,8 @@ def main(args, _seed):
             raise Exception("checkpoint required for mode: " + args["mode"])
 
         # load some options from the checkpoint
-        options = {"which_direction", "ngf", "ndf", "lab_colorization", "crop_size", "a_channels", "b_channels"}
+        options = {"which_direction", "ngf", "ndf", "lab_colorization", "crop_size", "a_channels", "b_channels", "angle_output"}
+
         with open(os.path.join(args["checkpoint"], "options.json")) as f:
             for key, val in json.loads(f.read()).items():
                 if key in options:
