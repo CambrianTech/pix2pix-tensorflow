@@ -36,15 +36,11 @@ def getSize(filename):
 
 def is_valid_image(path, require_rgb=True):
     try:
-        return True
-        what = imghdr.what(path)
-        if (what != "jpeg" and what != "png"):
-            return False
-
-        return True 
-        im=Image.open(path)
-        im.verify()
-        return not require_rgb or im.mode == "RGB"
+        file_extension = os.path.splitext(path)[1].lower()
+        return file_extension == ".jpeg" or file_extension == ".jpg" or file_extension == ".png"
+        # im=Image.open(path)
+        # im.verify()
+        # return not require_rgb or im.mode == "RGB"
     except IOError:
         print("IOError with image " + path)
         return False
