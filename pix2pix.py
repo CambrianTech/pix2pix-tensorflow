@@ -32,7 +32,7 @@ ex = Experiment("pix2pix")
 
 # Training:
 #train with composite a/b images:
-# python pix2pix.py with "args = {'combined_input_dir': '/Volumes/YUGE/datasets/shadows_ab'}"
+# python pix2pix.py with "args = {'input_dir': '/Volumes/YUGE/datasets/shadows_ab'}"
 
 #train with two directories:
 # python pix2pix.py with "args = {'a_input_dir': '/Volumes/YUGE/datasets/unreal_rugs_binary/train', 'b_input_dir': '/Volumes/YUGE/datasets/unreal_rugs_binary/train_labels'}"
@@ -43,26 +43,19 @@ ex = Experiment("pix2pix")
 # Exporting for feed forward
 # python pix2pix.py with "args = {'mode': 'export', 'checkpoint':'/Users/joelteply/Desktop/normals_pix2pix'}"
 
-
-# python pix2pix.py with "args = {'mode':'train', 'a_input_dir':'/Users/joelteply/Desktop/office_home_elevation', 'a_match_exp':'*_C.png', 'b_input_dir':'/Users/joelteply/Desktop/office_home_elevation', 'b_match_exp':'*_N.png,*_E.png', 'b_channels':'3,1'}"
-
 @ex.config
 def pix2pix_config():
     args = {
-        "ab_input_dir": None,
-        "ab_match_exp": None,
-
         "a_input_dir": None,
-        "a_match_exp": None,
-        "a_channels": "3",
-
+        "a_input_dir2": None,
         "b_input_dir": None,
+        "input_dir": None,
+        "input_match_exp": None,
+        "a_match_exp": None,
         "b_match_exp": None,
-        "b_channels": "3",
-
         "filter_categories": None,
         "mode": "train",
-        
+        "channels": 3,
         "output_dir": "output",
         "deploy_name": "model.pb",
         "checkpoint": None,
@@ -110,6 +103,100 @@ EPS = 1e-12
 
 Examples = collections.namedtuple("Examples", "paths, inputs, targets, count, steps_per_epoch")
 
+def check_image(image, channels=3):
+    assertion = tf.assert_equal(tf.shape(image)[-1], channels, message=("image must have %d color channels" % channels))
+    with tf.control_dependencies([assertion]):
+        image = tf.identity(image)
+
+    # make the last dimension 3 so that you can unstack the colors
+    shape = list(image.get_shape())
+    shape[-1] = channels
+    image.set_shape(shape)
+    return image
+
+# based on https://github.com/torch/image/blob/9f65c30167b2048ecbe8b7befdc6b2d6d12baee9/generic/image.c
+def rgb_to_lab(srgb):
+    with tf.name_scope("rgb_to_lab"):
+        srgb = check_image(srgb)
+        srgb_pixels = tf.reshape(srgb, [-1, 3])
+
+        with tf.name_scope("srgb_to_xyz"):
+            linear_mask = tf.cast(srgb_pixels <= 0.04045, dtype=tf.float32)
+            exponential_mask = tf.cast(srgb_pixels > 0.04045, dtype=tf.float32)
+            rgb_pixels = (srgb_pixels / 12.92 * linear_mask) + (((srgb_pixels + 0.055) / 1.055) ** 2.4) * exponential_mask
+            rgb_to_xyz = tf.constant([
+                #    X        Y          Z
+                [0.412453, 0.212671, 0.019334], # R
+                [0.357580, 0.715160, 0.119193], # G
+                [0.180423, 0.072169, 0.950227], # B
+            ])
+            xyz_pixels = tf.matmul(rgb_pixels, rgb_to_xyz)
+
+        # https://en.wikipedia.org/wiki/Lab_color_space#CIELAB-CIEXYZ_conversions
+        with tf.name_scope("xyz_to_cielab"):
+            # convert to fx = f(X/Xn), fy = f(Y/Yn), fz = f(Z/Zn)
+
+            # normalize for D65 white point
+            xyz_normalized_pixels = tf.multiply(xyz_pixels, [1/0.950456, 1.0, 1/1.088754])
+
+            epsilon = 6/29
+            linear_mask = tf.cast(xyz_normalized_pixels <= (epsilon**3), dtype=tf.float32)
+            exponential_mask = tf.cast(xyz_normalized_pixels > (epsilon**3), dtype=tf.float32)
+            fxfyfz_pixels = (xyz_normalized_pixels / (3 * epsilon**2) + 4/29) * linear_mask + (xyz_normalized_pixels ** (1/3)) * exponential_mask
+
+            # convert to lab
+            fxfyfz_to_lab = tf.constant([
+                #  l       a       b
+                [  0.0,  500.0,    0.0], # fx
+                [116.0, -500.0,  200.0], # fy
+                [  0.0,    0.0, -200.0], # fz
+            ])
+            lab_pixels = tf.matmul(fxfyfz_pixels, fxfyfz_to_lab) + tf.constant([-16.0, 0.0, 0.0])
+
+        return tf.reshape(lab_pixels, tf.shape(srgb))
+
+
+def lab_to_rgb(lab):
+    with tf.name_scope("lab_to_rgb"):
+        lab = check_image(lab)
+        lab_pixels = tf.reshape(lab, [-1, 3])
+
+        # https://en.wikipedia.org/wiki/Lab_color_space#CIELAB-CIEXYZ_conversions
+        with tf.name_scope("cielab_to_xyz"):
+            # convert to fxfyfz
+            lab_to_fxfyfz = tf.constant([
+                #   fx      fy        fz
+                [1/116.0, 1/116.0,  1/116.0], # l
+                [1/500.0,     0.0,      0.0], # a
+                [    0.0,     0.0, -1/200.0], # b
+            ])
+            fxfyfz_pixels = tf.matmul(lab_pixels + tf.constant([16.0, 0.0, 0.0]), lab_to_fxfyfz)
+
+            # convert to xyz
+            epsilon = 6/29
+            linear_mask = tf.cast(fxfyfz_pixels <= epsilon, dtype=tf.float32)
+            exponential_mask = tf.cast(fxfyfz_pixels > epsilon, dtype=tf.float32)
+            xyz_pixels = (3 * epsilon**2 * (fxfyfz_pixels - 4/29)) * linear_mask + (fxfyfz_pixels ** 3) * exponential_mask
+
+            # denormalize for D65 white point
+            xyz_pixels = tf.multiply(xyz_pixels, [0.950456, 1.0, 1.088754])
+
+        with tf.name_scope("xyz_to_srgb"):
+            xyz_to_rgb = tf.constant([
+                #     r           g          b
+                [ 3.2404542, -0.9692660,  0.0556434], # x
+                [-1.5371385,  1.8760108, -0.2040259], # y
+                [-0.4985314,  0.0415560,  1.0572252], # z
+            ])
+            rgb_pixels = tf.matmul(xyz_pixels, xyz_to_rgb)
+            # avoid a slightly negative number messing up the conversion
+            rgb_pixels = tf.clip_by_value(rgb_pixels, 0.0, 1.0)
+            linear_mask = tf.cast(rgb_pixels <= 0.0031308, dtype=tf.float32)
+            exponential_mask = tf.cast(rgb_pixels > 0.0031308, dtype=tf.float32)
+            srgb_pixels = (rgb_pixels * 12.92 * linear_mask) + ((rgb_pixels ** (1/2.4) * 1.055) - 0.055) * exponential_mask
+
+        return tf.reshape(srgb_pixels, tf.shape(lab))
+
 @ex.capture
 def load_examples(args):
     a_names = []
@@ -117,68 +204,31 @@ def load_examples(args):
     combined_names = []
     num_images = 0
 
-    input_channels = [int(x) for x in args["a_channels"].split(',')]
-    output_channels = [int(x) for x in args["b_channels"].split(',')]
-
     if not args["a_input_dir"] is None or not args["a_match_exp"] is None:
-        a_input_dirs = args["a_input_dir"].split(",")
-        b_input_dirs = args["b_input_dir"].split(",")
-        if args["a_match_exp"] is not None:
-            a_match_exps = args["a_match_exp"].split(",")
-        else:
-            a_match_exps = None
-
-        if args["b_match_exp"] is not None:
-            b_match_exps = args["b_match_exp"].split(",")
-        else:
-            b_match_exps = None
-
-        if len(a_input_dirs) == 1 and len(a_match_exps) > 1:
-            for i in range(1, len(a_match_exps)):
-                a_input_dirs.append(a_input_dirs[0])
-
-        if len(b_input_dirs) == 1 and len(b_match_exps) > 1:
-            for i in range(1, len(b_match_exps)):
-                b_input_dirs.append(b_input_dirs[0])
-
-        assert a_match_exps is None or len(a_input_dirs) == len(a_match_exps)
-        assert b_match_exps is None or len(b_input_dirs) == len(b_match_exps)
-
-        if a_match_exps:
-            a_names = [utils.get_image_paths(input_dir, match_exp) for input_dir, match_exp in zip(a_input_dirs, a_match_exps)]
-        else:
-            a_names = [utils.get_image_paths(input_dir, None) for input_dir in a_input_dirs]
-
-        if b_match_exps:
-            b_names = [utils.get_image_paths(input_dir, match_exp) for input_dir, match_exp in zip(b_input_dirs, b_match_exps)]
-        else:
-            b_names = [utils.get_image_paths(input_dir, None) for input_dir in b_input_dirs]
-
-        if any([len(a_names[0]) != len(names) for names in a_names]):
-            raise Exception("Image count for a_input_dirs not equal")
-
-        if any([len(b_names[0]) != len(names) for names in b_names]):
-            raise Exception("Image count for b_input_dirs not equal")
-
-        if len(a_names[0]) != len(b_names[0]):
-            raise Exception("len a_input_dirs not equal to len b_input_dirs")
-
+        a_names, b_names = utils.getABImagePaths(args)
         if not a_names is None:
-            num_images = len(a_names[0])
-    elif not args["ab_input_dir"] is None:
-        combined_names = utils.get_image_paths(args["ab_input_dir"], args["ab_match_exp"])
+            num_images = len(a_names)
+    elif not args["input_dir"] is None:
+        combined_names = utils.get_image_paths(args["input_dir"], args["input_match_exp"])
         if not combined_names is None:
             num_images = len(combined_names)
     else:
-        raise Exception("ab_input_dir or a_input_dir/b_input_dir required")
+        raise Exception("input_dir or a_input_dir/b_input_dir required")
 
     if num_images == 0:
         raise Exception("No images found at input path")
 
     if len(a_names) > 0:
-        filename, file_extension = os.path.splitext(a_names[0][0])
+        filename, file_extension = os.path.splitext(a_names[0])
     else:
         filename, file_extension = os.path.splitext(combined_names[0])
+
+    if file_extension == ".png":
+        decode = tf.image.decode_png
+    elif file_extension == ".jpg" or file_extension == ".jpeg":
+        decode = tf.image.decode_jpeg
+    else:
+        raise Exception("input_dir contains no image files")
     
     def get_name(path):
         name, _ = os.path.splitext(os.path.basename(path))
@@ -189,11 +239,14 @@ def load_examples(args):
             path_queue = tf.train.string_input_producer(combined_names, shuffle=args["mode"] == "train")
             reader = tf.WholeFileReader()
             paths, contents = reader.read(path_queue)
-            
-            raw_input = tf.image.decode_image(contents, channels=input_channels[0])
+            raw_input = decode(contents, channels=args["channels"])
             raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
 
-            raw_input.set_shape([None, None, input_channels[0]])
+            assertion = tf.assert_equal(tf.shape(raw_input)[2], args["channels"], message=("image does not have %d channels" % args["channels"]))
+            with tf.control_dependencies([assertion]):
+                raw_input = tf.identity(raw_input)
+
+            raw_input.set_shape([None, None, args["channels"]])
 
             # break apart image pair and move to range [-1, 1]
             width = tf.shape(raw_input)[1] # [height, width, channels]
@@ -209,41 +262,34 @@ def load_examples(args):
 # you will want to use tf.concat to combine them together.
 
         else:
-            path_queues = tf.train.slice_input_producer(a_names + b_names, shuffle=args["mode"] == "train")
+            path_queue = tf.train.slice_input_producer([a_names, b_names], shuffle=args["mode"] == "train")
+            paths = path_queue
 
-            a_paths_count = len(a_names)
-            b_paths_count = len(b_names)
+            a_path = tf.decode_raw(path_queue[0], tf.uint8)
+            a_contents = tf.read_file(path_queue[0])
+            raw_input_a = decode(a_contents, channels=args["channels"])
+            raw_input_a = tf.image.convert_image_dtype(raw_input_a, dtype=tf.float32)
 
-            paths = path_queues
+            assertion = tf.assert_equal(tf.shape(raw_input_a)[2], args["channels"], message="image %s does not have %d channels" % (a_path, args["channels"]))
+            with tf.control_dependencies([assertion]):
+                raw_input_a = tf.identity(raw_input_a)
 
-            images = []
+            raw_input_a.set_shape([None, None, args["channels"]])
 
-            for i, path_queue in enumerate(path_queues):
-                contents = tf.read_file(path_queue)
+            b_path = tf.decode_raw(path_queue[1], tf.uint8)
+            b_contents = tf.read_file(path_queue[1])
+            raw_input_b = decode(b_contents, channels=args["channels"])
+            raw_input_b = tf.image.convert_image_dtype(raw_input_b, dtype=tf.float32)            
 
-                if i < len(input_channels):
-                    num_channels = input_channels[0] if len(input_channels) == 1 else input_channels[i]
-                else:
-                    num_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i-a_paths_count]
+            assertion = tf.assert_equal(tf.shape(raw_input_b)[2], args["channels"], message="image %s does not have %d channels" % (b_path, args["channels"]))
+            with tf.control_dependencies([assertion]):
+                raw_input_b = tf.identity(raw_input_b)
 
-                raw_input = tf.image.decode_image(contents, channels=num_channels)
-                raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
-                raw_input.set_shape([None, None, num_channels])
-                raw_input = pix2pix_model.preprocess(raw_input)
+            raw_input_b.set_shape([None, None, args["channels"]])
 
-                # Resize here instead of later since we need to concat
-                raw_input = tf.image.resize_images(raw_input, (args["scale_size"], args["scale_size"]), method=tf.image.ResizeMethod.AREA)
-
-                images.append(raw_input)
-
-            assert len(images) == a_paths_count + b_paths_count
-
-            a_images = images[:a_paths_count]
-            b_images = images[a_paths_count:]
-
-            # Stack along channel dimension
-            a_images = tf.concat(a_images, axis=-1)
-            b_images = tf.concat(b_images, axis=-1)
+            a_images = pix2pix_model.preprocess(raw_input_a)
+            b_images = pix2pix_model.preprocess(raw_input_b)
+    
 
     if args["which_direction"] == "AtoB":
         inputs, targets = [a_images, b_images]
@@ -342,7 +388,7 @@ def main(args, _seed):
 
     if args["scale_size"] == 0:
         args["scale_size"] = args["crop_size"]
-    
+
     print("Image flipping is turned", ('ON' if args["flip"] else 'OFF'))
 
     tf.set_random_seed(_seed)
@@ -357,8 +403,7 @@ def main(args, _seed):
             raise Exception("checkpoint required for mode: " + args["mode"])
 
         # load some options from the checkpoint
-        options = {"which_direction", "ngf", "ndf", "lab_colorization", "crop_size", "a_channels", "b_channels", "angle_output"}
-
+        options = {"which_direction", "ngf", "ndf", "lab_colorization", "crop_size", "channels", "angle_output"}
         with open(os.path.join(args["checkpoint"], "options.json")) as f:
             for key, val in json.loads(f.read()).items():
                 if key in options:
@@ -368,26 +413,18 @@ def main(args, _seed):
         args["scale_size"] = args["crop_size"]
         args["flip"] = False
 
-    # Count input and output channels after we loaded the options
-    input_channels = [int(x) for x in args["a_channels"].split(',')]
-    output_channels = [int(x) for x in args["b_channels"].split(',')]
-    num_input_channels = sum(input_channels)
-    num_output_channels = sum(output_channels)
-    print("Num input channels:", num_input_channels)
-    print("Num output channels:", num_output_channels)
-
     if args["mode"] != "deploy":
         with open(os.path.join(args["output_dir"], "options.json"), "w") as f:
             f.write(json.dumps(args, sort_keys=True, indent=4))
 
     if args["mode"] == "export":
         # export the generator to a meta graph that can be imported later for standalone generation
-        shape = [args["crop_size"], args["crop_size"], num_input_channels]
+        shape = [args["crop_size"], args["crop_size"], args["channels"]]
         input_image = tf.placeholder(dtype=tf.float32, shape=shape, name='input')
         batch_input = tf.expand_dims(input_image, axis=0)
 
         with tf.variable_scope("generator"):
-            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(args, pix2pix_model.preprocess(batch_input), num_output_channels))
+            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(args, pix2pix_model.preprocess(batch_input), args["channels"]))
 
         # output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
         # output_image = tf.identity(output_image, name='output')
@@ -426,14 +463,16 @@ def main(args, _seed):
 
         return
 
+        return
+
     if args["mode"] == "deploy":
         # export the generator to a meta graph that can be imported later for standalone generation
-        shape = [args["crop_size"], args["crop_size"], num_input_channels]
+        shape = [args["crop_size"], args["crop_size"], args["channels"]]
         input_image = tf.placeholder(dtype=tf.float32, shape=shape, name='input')
         batch_input = tf.expand_dims(input_image, axis=0)
 
         with tf.variable_scope("generator"):
-            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(args, pix2pix_model.preprocess(batch_input), num_input_channels))
+            batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(args, pix2pix_model.preprocess(batch_input), args["channels"]))
 
         # output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
         # output_image = tf.identity(output_image, name='output')
@@ -542,37 +581,13 @@ def main(args, _seed):
 
     # summaries
     with tf.name_scope("inputs_summary"):
-        if args["a_input_dir"] is not None:
-            a_input_dir_count = max(len(args["a_input_dir"].split(",")),len(args["a_match_exp"].split(",")))
-            channel_index = 0
-            for i in range(a_input_dir_count):
-                i_channels = input_channels[0] if len(input_channels) == 1 else input_channels[i]
-                tf.summary.image("inputs_%d" % i, converted_inputs[:, :, :, channel_index:channel_index+i_channels])
-                channel_index += i_channels
-        else:
-            tf.summary.image("inputs", converted_inputs[:, :, :, :int(input_channels[0])])
+        tf.summary.image("inputs", converted_inputs)
 
     with tf.name_scope("targets_summary"):
-        if args["b_input_dir"] is not None:
-            b_input_dir_count = max(len(args["b_input_dir"].split(",")),len(args["b_match_exp"].split(",")))
-            channel_index = 0
-            for i in range(b_input_dir_count):
-                o_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
-                tf.summary.image("targets_%d" % i, converted_targets[:, :, :, channel_index:channel_index+o_channels])
-                channel_index += o_channels
-        else:
-            tf.summary.image("targets", converted_targets[:, :, :, :int(output_channels[0])])
+        tf.summary.image("targets", converted_targets)
 
     with tf.name_scope("outputs_summary"):
-        if args["b_input_dir"] is not None:
-            b_input_dir_count = max(len(args["b_input_dir"].split(",")),len(args["b_match_exp"].split(",")))
-            channel_index = 0
-            for i in range(b_input_dir_count):
-                o_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
-                tf.summary.image("outputs_%d" % i, converted_outputs[:, :, :, channel_index:channel_index+o_channels])
-                channel_index += o_channels
-        else:
-            tf.summary.image("outputs", converted_outputs[:, :, :, :int(output_channels[0])])
+        tf.summary.image("outputs", converted_outputs)
 
     with tf.name_scope("predict_real_summary"):
         tf.summary.image("predict_real", tf.image.convert_image_dtype(model.predict_real, dtype=tf.uint8))
