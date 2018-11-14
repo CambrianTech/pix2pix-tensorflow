@@ -410,15 +410,17 @@ def main(args, _seed):
 
         output_list = []
         outputs = {}
+        last_index = 0
         for i in range(output_count):
             num_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
             shape = [args["crop_size"], args["crop_size"], num_channels]
             output_name = 'output_' + str(i)
             
-            subset = all_channels[i:i+num_channels]
+            subset = all_channels[last_index:last_index+num_channels]
             output_image = tf.concat(subset, axis=-1, name=output_name)
             outputs[output_name] = output_image
             print("Output '%s':" % output_name, shape)
+            last_index += num_channels
 
          #[print(n.name) for n in tf.get_default_graph().as_graph_def().node]
         
