@@ -17,7 +17,7 @@ from scipy import misc
 import cv2
 
 import shutil
-import utils
+from cambrian import utils
 import pix2pix_model
 
 from tensorflow.python.framework import graph_util,dtypes
@@ -75,7 +75,7 @@ def pix2pix_config():
         "progress_freq": 50,
         "trace_freq": 0,
         "display_freq": 0,
-        "save_freq": 5000,
+        "save_freq": 200,
         "separable_conv": False,
         "aspect_ratio": 1.0,
         "lab_colorization": False,
@@ -341,7 +341,7 @@ def main(args, _seed):
 
     if args["scale_size"] == 0:
         args["scale_size"] = args["crop_size"]
-    
+
     print("Image flipping is turned", ('ON' if args["flip"] else 'OFF'))
 
     tf.set_random_seed(_seed)

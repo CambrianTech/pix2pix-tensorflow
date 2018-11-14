@@ -17,7 +17,7 @@ from scipy import misc
 import fnmatch
 import cv2
 import re
-import utils
+from cambrian import utils
 import ast
 
 #example usage:
@@ -258,7 +258,7 @@ def processFiles(a_names, b_names):
         a_name = a_names[i]
         b_name = b_names[i]
 
-        combined_img = utils.getCombinedImage(a_name, b_name, a_margin=a_margin, b_margin=b_margin, b_function=b_function)
+        combined_img = utils.get_combined_image(a_name, b_name, a_margin=a_margin, b_margin=b_margin, b_function=b_function)
 
         if not combined_img is None:
             combined_img_name = os.path.basename(a_name)
@@ -277,7 +277,7 @@ def main():
         "b_match_exp": a.b_match_exp,
         "filter_categories": a.filter_categories
     }
-    a_names, b_names = utils.getABImagePaths(a_dir, require_rgb=False)
+    a_names, b_names = utils.get_ab_image_paths(a_dir, require_rgb=False)
 
     processFiles(a_names, b_names)  
     

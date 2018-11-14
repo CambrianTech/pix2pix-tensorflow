@@ -17,7 +17,7 @@ from scipy import misc
 import cv2
 import pix2pix_model
 
-import utils
+from cambrian import utils
 
 from tensorflow.python.framework import graph_util,dtypes
 from tensorflow.python.tools import optimize_for_inference_lib, selective_registration_header_lib
@@ -122,7 +122,7 @@ def main():
 
         while True:
 
-            filtered_dirs = utils.getFilteredDirs(a)
+            filtered_dirs = utils.get_filtered_dirs(a)
             paths = utils.get_image_paths(a.input_dir, a.input_match_exp, require_rgb=False, filtered_dirs=filtered_dirs)
 
             num_images = len(paths)

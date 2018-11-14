@@ -17,9 +17,8 @@ from scipy import misc
 import fnmatch
 import cv2
 import re
-import utils
+from cambrian import utils, image_processing
 import ast
-import image_processing
 
 parser = argparse.ArgumentParser()
 
@@ -81,7 +80,7 @@ def main():
         "b_match_exp": a.b_match_exp,
         "filter_categories": a.filter_categories
     }
-    a_names, b_names = utils.getABImagePaths(a_dir, require_rgb=False)
+    a_names, b_names = utils.get_ab_image_paths(a_dir, require_rgb=False)
 
     combine(a_names, b_names)  
     
