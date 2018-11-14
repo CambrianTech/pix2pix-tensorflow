@@ -103,6 +103,7 @@ def pix2pix_config():
         "gan_loss": "gan",
         "gp_weight": 0,
         "init_stddev": 0.02,
+        "angle_output": False,
     }
 
 EPS = 1e-12
@@ -356,7 +357,9 @@ def main(args, _seed):
             raise Exception("checkpoint required for mode: " + args["mode"])
 
         # load some options from the checkpoint
-        options = {"which_direction", "ngf", "ndf", "lab_colorization", "crop_size", "a_channels", "b_channels"}
+        options = {"which_direction", "ngf", "ndf", "lab_colorization", "crop_size", "a_channels", "b_channels", \
+            "a_input_dir", "b_input_dir", "a_match_exp", "b_match_exp", "angle_output"}
+
         with open(os.path.join(args["checkpoint"], "options.json")) as f:
             for key, val in json.loads(f.read()).items():
                 if key in options:
@@ -379,26 +382,49 @@ def main(args, _seed):
             f.write(json.dumps(args, sort_keys=True, indent=4))
 
     if args["mode"] == "export":
-        # export the generator to a meta graph that can be imported later for standalone generation
-        shape = [args["crop_size"], args["crop_size"], num_input_channels]
-        input_image = tf.placeholder(dtype=tf.float32, shape=shape, name='input')
-        batch_input = tf.expand_dims(input_image, axis=0)
 
+        # export the generator to a meta graph that can be imported later for standalone generation
+        input_count = max(len(args["a_input_dir"].split(",")),len(args["a_match_exp"].split(",")))
+        output_count = max(len(args["b_input_dir"].split(",")),len(args["b_match_exp"].split(",")))
+
+        print("\n###################### INPUT OUTPUT SUMMARY #############################")
+
+        input_list = []
+        inputs = {}
+        for i in range(input_count):
+            num_channels = input_channels[0] if len(input_channels) == 1 else input_channels[i]
+            shape = [args["crop_size"], args["crop_size"], num_channels]
+            input_name = 'input_' + str(i)
+            input_image = tf.placeholder(dtype=tf.float32, shape=shape, name=input_name)
+            input_n = tf.expand_dims(input_image, axis=0)
+            input_list.append(input_n)
+            inputs[input_name] = input_n
+            print("Input '%s':" % input_name, shape)
+
+        batch_input = tf.concat(input_list, axis=-1)
+        
         with tf.variable_scope("generator"):
             batch_output = pix2pix_model.deprocess(pix2pix_model.create_generator(args, pix2pix_model.preprocess(batch_input), num_output_channels))
 
-        # output_image = tf.image.convert_image_dtype(batch_output, dtype=tf.uint8)[0]
-        # output_image = tf.identity(output_image, name='output')
-        # output_image = tf.identity(batch_output[0], name='output')
+        all_channels = tf.split(axis=3, num_or_size_splits=num_output_channels, value=batch_output)
 
-        input_name = batch_input.name.split(':')[0]
-        output_name = batch_output.name.split(':')[0]
+        output_list = []
+        outputs = {}
+        last_index = 0
+        for i in range(output_count):
+            num_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
+            shape = [args["crop_size"], args["crop_size"], num_channels]
+            output_name = 'output_' + str(i)
+            
+            subset = all_channels[last_index:last_index+num_channels]
+            output_image = tf.concat(subset, axis=-1, name=output_name)
+            outputs[output_name] = output_image
+            print("Output '%s':" % output_name, shape)
+            last_index += num_channels
 
          #[print(n.name) for n in tf.get_default_graph().as_graph_def().node]
-        print("##############################################################\n")
-        print("Input Name:", input_name)
-        print("Output Name:", output_name)
-        print("##############################################################\n")
+        
+        print("#########################################################################\n")
 
         init_op = tf.global_variables_initializer()
         restore_saver = tf.train.Saver()
@@ -411,10 +437,10 @@ def main(args, _seed):
             print("\nLoading model from checkpoint %s" % args["checkpoint"])
             checkpoint = tf.train.latest_checkpoint(args["checkpoint"])
             restore_saver.restore(sess, checkpoint)
-            
+
             # Save the model
-            inputs = {'input': batch_input}
-            outputs = {'output': batch_output}
+            # inputs = {'input': batch_input}
+            # outputs = {'output': batch_output}
 
             shutil.rmtree(args["output_dir"])
             tf.saved_model.simple_save(sess, args["output_dir"], inputs, outputs)
