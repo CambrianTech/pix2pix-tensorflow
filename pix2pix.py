@@ -205,7 +205,7 @@ def load_examples(args):
     num_images = 0
 
     if not args["a_input_dir"] is None or not args["a_match_exp"] is None:
-        a_names, b_names = utils.getABImagePaths(args)
+        a_names, b_names = utils.get_ab_image_paths(args)
         if not a_names is None:
             num_images = len(a_names)
     elif not args["input_dir"] is None:
