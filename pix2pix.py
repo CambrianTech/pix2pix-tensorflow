@@ -82,15 +82,6 @@ def pix2pix_config():
         "angle_output": False,
     }
 
-def get_serving_input_receiver_fn(a_specs):
-	def serving_input_receiver_fn():
-		inputs = {
-            cambrian.nn.get_input_name(i): tf.placeholder(spec.dtype, (None, spec.crop_size, spec.crop_size, spec.channels))
-            for i, spec in enumerate(a_specs)
-        }
-		return tf.estimator.export.ServingInputReceiver(inputs, inputs)
-	return serving_input_receiver_fn
-
 def get_specs_from_args(args):
     # If we only have single elements for inputs or channels
     # make a list out of them
@@ -179,6 +170,6 @@ def main(args, _seed):
         eval_input_fn = cambrian.nn.get_input_fn_ab(a_specs, b_specs, eval_input_fn_args)
         estimator.evaluate(eval_input_fn)
     elif args["mode"] == "export":
-        estimator.export_saved_model(args["export_dir"], get_serving_input_receiver_fn(a_specs))
+        estimator.export_saved_model(args["export_dir"], cambrian.nn.get_serving_input_receiver_fn(a_specs))
     else:
         print("Unknown mode", args.mode)
