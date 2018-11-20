@@ -42,6 +42,13 @@ class Pix2PixModel(cambrian.nn.ModelBase):
                 discrim_loss = tf.reduce_mean(-(tf.log(predict_real + EPS) + tf.log(1 - predict_fake + EPS)))
             elif self.args["gan_loss"] == "wgan":
                 discrim_loss = tf.reduce_mean(predict_fake - predict_real)
+            elif self.args["gan_loss"] == "ganqp":
+                discrim_loss = predict_fake - predict_real
+                # They chose a 10x multiplier for the norm in the paper, but seems like another hyperparameter.
+                # Also choosing L1 norm instead of L2 works but L2 gave them slightly better results.
+                norm_axes = list(range(1, len(discrim_loss.shape))) # All axes except first (batch)
+                norm = 10 * tf.sqrt(tf.reduce_mean(tf.square(discrim_loss), axis=norm_axes, keepdims=True))
+                discrim_loss = tf.reduce_mean(discrim_loss + 0.5 * tf.square(discrim_loss) / norm)
             else:
                 raise Exception("Unknown gan_loss:", self.args["gan_loss"])
 
@@ -50,7 +57,7 @@ class Pix2PixModel(cambrian.nn.ModelBase):
             # abs(self.targets - self.outputs) => 0
             if self.args["gan_loss"] == "gan":
                 gen_loss_GAN = tf.reduce_mean(-tf.log(predict_fake + EPS))
-            elif self.args["gan_loss"] == "wgan":
+            elif self.args["gan_loss"] == "wgan" or self.args["gan_loss"] == "ganqp":
                 gen_loss_GAN = tf.reduce_mean(predict_real - predict_fake)
             else:
                 raise Exception("Unknown gan_loss:", self.args["gan_loss"])
