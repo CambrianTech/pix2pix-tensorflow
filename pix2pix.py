@@ -4,40 +4,13 @@ from __future__ import print_function
 
 import tensorflow as tf
 import numpy as np
-import os
-import json
 import random
-import collections
-import math
-import cv2
-
-import shutil
 import cambrian
-from cambrian import utils
 from pix2pix_model import Pix2PixModel
-
-from tensorflow.python.framework import graph_util, dtypes
-from tensorflow.python.tools import optimize_for_inference_lib, selective_registration_header_lib
-
 from sacred import Experiment
 from sacred.stflow import LogFileWriter
 
 ex = Experiment("pix2pix")
-
-#Examples:
-
-# Training:
-#train with composite a/b images:
-# python pix2pix.py with "args = {'input_dir': '/Volumes/YUGE/datasets/shadows_ab'}"
-
-#train with two directories:
-# python pix2pix.py with "args = {'a_input_dir': '/Volumes/YUGE/datasets/unreal_rugs_binary/train', 'b_input_dir': '/Volumes/YUGE/datasets/unreal_rugs_binary/train_labels'}"
-
-#train with two directories using four channels:
-# python pix2pix.py with "args = {'channels': 4, 'a_input_dir': '/Users/joelteply/Desktop/unreal_rugs_binary/train', 'b_input_dir': '/Users/joelteply/Desktop/unreal_rugs_binary/train_labels'}"
-
-# Exporting for feed forward
-# python pix2pix.py with "args = {'mode': 'export', 'checkpoint':'/Users/joelteply/Desktop/normals_pix2pix'}"
 
 @ex.config
 def pix2pix_config():
