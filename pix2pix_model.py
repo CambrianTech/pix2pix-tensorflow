@@ -113,15 +113,16 @@ class Pix2PixModel(cambrian.nn.ModelBase):
         with tf.name_scope("predict_fake_summary"):
             tf.summary.image("predict_fake", tf.image.convert_image_dtype(predict_fake, dtype=tf.uint8))
 
-        tf.summary.scalar("discriminator_loss", discrim_loss)
-        tf.summary.scalar("generator_loss_GAN", gen_loss_GAN)
-        tf.summary.scalar("generator_loss_L1", gen_loss_L1)
+        with tf.name_scope("scalar_summaries"):
+            tf.summary.scalar("discriminator_loss", discrim_loss)
+            tf.summary.scalar("generator_loss_GAN", gen_loss_GAN)
+            tf.summary.scalar("generator_loss_L1", gen_loss_L1)
 
-        if self.args["gan_loss"] == "wgan":
-            tf.summary.scalar("wgan_d_minus_g", discrim_loss - gen_loss_GAN)
+            if self.args["gan_loss"] == "wgan":
+                tf.summary.scalar("wgan_d_minus_g", discrim_loss - gen_loss_GAN)
 
-        if gradient_penalty is not None:
-            tf.summary.scalar("gradient_penalty", gradient_penalty)
+            if gradient_penalty is not None:
+                tf.summary.scalar("gradient_penalty", gradient_penalty)
 
         for var in tf.trainable_variables():
             tf.summary.histogram(var.op.name + "/values", var)
