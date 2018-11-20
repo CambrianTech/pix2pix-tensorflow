@@ -51,7 +51,7 @@ class Pix2PixModel(cambrian.nn.ModelBase):
             if self.args["gan_loss"] == "gan":
                 gen_loss_GAN = tf.reduce_mean(-tf.log(predict_fake + EPS))
             elif self.args["gan_loss"] == "wgan":
-                gen_loss_GAN = tf.reduce_mean(-predict_fake)
+                gen_loss_GAN = tf.reduce_mean(predict_real - predict_fake)
             else:
                 raise Exception("Unknown gan_loss:", self.args["gan_loss"])
 
