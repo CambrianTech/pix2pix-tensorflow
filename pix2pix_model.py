@@ -97,6 +97,38 @@ class Pix2PixModel(cambrian.nn.ModelBase):
         self.metrics["gen_total"] = gen_loss
         self.metrics["disc_total"] = discrim_total_loss
 
+        # Summaries
+        with tf.name_scope("inputs_summary"):
+            tf.summary.image("inputs", tf.image.convert_image_dtype(self.inputs, dtype=tf.uint8, saturate=True))
+
+        with tf.name_scope("targets_summary"):
+            tf.summary.image("targets", tf.image.convert_image_dtype(self.targets, dtype=tf.uint8, saturate=True))
+
+        with tf.name_scope("outputs_summary"):
+            tf.summary.image("outputs", tf.image.convert_image_dtype(self.outputs, dtype=tf.uint8, saturate=True))
+
+        with tf.name_scope("predict_real_summary"):
+            tf.summary.image("predict_real", tf.image.convert_image_dtype(predict_real, dtype=tf.uint8))
+
+        with tf.name_scope("predict_fake_summary"):
+            tf.summary.image("predict_fake", tf.image.convert_image_dtype(predict_fake, dtype=tf.uint8))
+
+        tf.summary.scalar("discriminator_loss", discrim_loss)
+        tf.summary.scalar("generator_loss_GAN", gen_loss_GAN)
+        tf.summary.scalar("generator_loss_L1", gen_loss_L1)
+
+        if self.args["gan_loss"] == "wgan":
+            tf.summary.scalar("wgan_d_minus_g", discrim_loss - gen_loss_GAN)
+
+        if gradient_penalty is not None:
+            tf.summary.scalar("gradient_penalty", gradient_penalty)
+
+        for var in tf.trainable_variables():
+            tf.summary.histogram(var.op.name + "/values", var)
+
+        for grad, var in discrim_grads_and_vars + gen_grads_and_vars:
+            tf.summary.histogram(var.op.name + "/gradients", grad)
+
     def set_inputs(self, inputs):
         super().set_inputs(inputs)
         self._setup_general()
