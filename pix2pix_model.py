@@ -39,7 +39,7 @@ class Pix2PixModel(cambrian.nn.ModelBase):
             # predict_real => 1
             # predict_fake => 0
             if self.args["gan_loss"] == "gan":
-                discrim_loss = tf.reduce_mean(-(tf.log(predict_real + EPS) + tf.log(1 - predict_fake + EPS)))
+                discrim_loss = tf.reduce_mean(-(tf.log(tf.sigmoid(predict_real) + EPS) + tf.log(1 - tf.sigmoid(predict_fake) + EPS)))
             elif self.args["gan_loss"] == "wgan":
                 discrim_loss = tf.reduce_mean(predict_fake - predict_real)
             elif self.args["gan_loss"] == "ganqp":
@@ -56,7 +56,7 @@ class Pix2PixModel(cambrian.nn.ModelBase):
             # predict_fake => 1
             # abs(self.targets - self.outputs) => 0
             if self.args["gan_loss"] == "gan":
-                gen_loss_GAN = tf.reduce_mean(-tf.log(predict_fake + EPS))
+                gen_loss_GAN = tf.reduce_mean(-tf.log(tf.sigmoid(predict_fake) + EPS))
             elif self.args["gan_loss"] == "wgan" or self.args["gan_loss"] == "ganqp":
                 gen_loss_GAN = tf.reduce_mean(predict_real - predict_fake)
             else:
@@ -298,15 +298,7 @@ def create_discriminator(args, discrim_inputs, discrim_targets):
 
     # layer_5: [batch, 31, 31, ndf * 8] => [batch, 30, 30, 1]
     with tf.variable_scope("layer_%d" % (len(layers) + 1)):
-        convolved = discrim_conv(rectified, 1, 1, args["init_stddev"])
-
-        # Only use sigmoid for normal GAN.
-        # WGAN requires a full linear output.
-        if args["gan_loss"] == "gan":
-            output = tf.sigmoid(convolved)
-        else:
-            output = convolved
-
+        output = discrim_conv(rectified, 1, 1, args["init_stddev"])
         layers.append(output)
 
     return layers[-1]
