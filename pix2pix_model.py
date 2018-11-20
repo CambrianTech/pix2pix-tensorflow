@@ -90,12 +90,14 @@ class Pix2PixModel(cambrian.nn.ModelBase):
         self._train_op = gen_train
         self._loss = gen_loss_L1
         
+        # Metrics
         self.metrics["gen_l1"] = gen_loss_L1
         self.metrics["gen_gan"] = gen_loss_GAN
         self.metrics["disc_gan"] = discrim_loss
-        self.metrics["disc_gp"] = gradient_penalty
         self.metrics["gen_total"] = gen_loss
         self.metrics["disc_total"] = discrim_total_loss
+        if gradient_penalty is not None:
+            self.metrics["disc_gp"] = gradient_penalty
 
         # Summaries
         with tf.name_scope("inputs_summary"):
