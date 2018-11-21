@@ -111,13 +111,13 @@ class Pix2PixModel(cambrian.nn.ModelBase):
         # Summaries
         for spec in self.args["a_specs"]:
             with tf.name_scope("inputs_summary"):
-                tf.summary.image("inputs_%d" % spec.index, self.inputs[:, :, :, spec.start_channel:spec.start_channel+spec.channels])
+                tf.summary.image("inputs_%d" % spec.index, tf.image.convert_image_dtype(self.inputs[:, :, :, spec.start_channel:spec.start_channel+spec.channels], dtype=tf.uint8))
             with tf.name_scope("outputs_summary"):
-                tf.summary.image("outputs_%d" % spec.index, self.outputs[:, :, :, spec.start_channel:spec.start_channel+spec.channels])
+                tf.summary.image("outputs_%d" % spec.index, tf.image.convert_image_dtype(self.outputs[:, :, :, spec.start_channel:spec.start_channel+spec.channels], dtype=tf.uint8))
 
         for spec in self.args["b_specs"]:
             with tf.name_scope("targets_summary"):
-                tf.summary.image("targets_%d" % spec.index, self.targets[:, :, :, spec.start_channel:spec.start_channel+spec.channels])
+                tf.summary.image("targets_%d" % spec.index, tf.image.convert_image_dtype(self.targets[:, :, :, spec.start_channel:spec.start_channel+spec.channels], dtype=tf.uint8))
 
         with tf.name_scope("predict_real_summary"):
             tf.summary.image("predict_real", tf.image.convert_image_dtype(predict_real, dtype=tf.uint8))
