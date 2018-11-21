@@ -117,26 +117,20 @@ class Pix2PixModel(cambrian.nn.ModelBase):
 
         # summaries
         with tf.name_scope("inputs_summary"):
-            if self.args["a_input_dir"] is not None:
-                a_input_dir_count = len(self.args["a_input"])
-                channel_index = 0
-                for i in range(a_input_dir_count):
-                    i_channels = input_channels[0] if len(input_channels) == 1 else input_channels[i]
-                    tf.summary.image("inputs_%d" % i, self.inputs[:, :, :, channel_index:channel_index+i_channels])
-                    channel_index += i_channels
-            else:
-                tf.summary.image("inputs", self.inputs[:, :, :, :int(input_channels[0])])
+            a_input_dir_count = len(self.args["a_input"])
+            channel_index = 0
+            for i in range(a_input_dir_count):
+                i_channels = input_channels[0] if len(input_channels) == 1 else input_channels[i]
+                tf.summary.image("inputs_%d" % i, self.inputs[:, :, :, channel_index:channel_index+i_channels])
+                channel_index += i_channels
 
         with tf.name_scope("targets_summary"):
-            if self.args["b_input_dir"] is not None:
-                b_input_dir_count = len(self.args["b_input"])
-                channel_index = 0
-                for i in range(b_input_dir_count):
-                    o_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
-                    tf.summary.image("targets_%d" % i, self.targets[:, :, :, channel_index:channel_index+o_channels])
-                    channel_index += o_channels
-            else:
-                tf.summary.image("targets", self.targets[:, :, :, :int(output_channels[0])])
+            b_input_dir_count = len(self.args["b_input"])
+            channel_index = 0
+            for i in range(b_input_dir_count):
+                o_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
+                tf.summary.image("targets_%d" % i, self.targets[:, :, :, channel_index:channel_index+o_channels])
+                channel_index += o_channels
 
         with tf.name_scope("outputs_summary"):
             tf.summary.image("outputs", tf.image.convert_image_dtype(self.outputs, dtype=tf.uint8, saturate=True))
