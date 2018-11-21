@@ -14,7 +14,7 @@ class Pix2PixModel(cambrian.nn.ModelBase):
         if self.is_general_setup:
            raise Exception("General was already set up.")
 
-        with tf.variable_scope("generator"):
+        with tf.variable_scope("generator", use_resource=True):
             out_channels = sum([spec.channels for spec in self.args["b_specs"]])
             self._outputs = create_generator(self.args, self.inputs, out_channels)
 
@@ -25,12 +25,12 @@ class Pix2PixModel(cambrian.nn.ModelBase):
          # create two copies of discriminator, one for real pairs and one for fake pairs
         # they share the same underlying variables
         with tf.name_scope("real_discriminator"):
-            with tf.variable_scope("discriminator"):
+            with tf.variable_scope("discriminator", use_resource=True):
                 # 2x [batch, height, width, channels] => [batch, 30, 30, 1]
                 predict_real = create_discriminator(self.args, self.inputs, self.targets)
 
         with tf.name_scope("fake_discriminator"):
-            with tf.variable_scope("discriminator", reuse=True):
+            with tf.variable_scope("discriminator", reuse=True, use_resource=True):
                 # 2x [batch, height, width, channels] => [batch, 30, 30, 1]
                 predict_fake = create_discriminator(self.args, self.inputs, self.outputs)
 
@@ -71,7 +71,7 @@ class Pix2PixModel(cambrian.nn.ModelBase):
         if self.args["gp_weight"] is not None and self.args["gp_weight"] > 0:
             with tf.name_scope("gradient_penalty"):
                 rand_interp = random_interpolate(self.targets, self.outputs)
-                with tf.variable_scope("discriminator", reuse=True):
+                with tf.variable_scope("discriminator", reuse=True, use_resource=True):
                     predict_rand_interp = create_discriminator(self.args, self.inputs, rand_interp)
                 gradient_penalty = self.args["gp_weight"] * get_gradient_penalty(self.args, predict_rand_interp, rand_interp)
         else:
@@ -140,7 +140,9 @@ class Pix2PixModel(cambrian.nn.ModelBase):
             tf.summary.histogram(var.op.name + "/values", var)
 
         for grad, var in discrim_grads_and_vars + gen_grads_and_vars:
-            tf.summary.histogram(var.op.name + "/gradients", grad)
+            # grad can be None since we are using checkpointing
+            if grad is not None:
+                tf.summary.histogram(var.op.name + "/gradients", grad)
 
     def set_inputs(self, inputs):
         super().set_inputs(inputs)
@@ -149,6 +151,16 @@ class Pix2PixModel(cambrian.nn.ModelBase):
     def set_targets(self, targets):
         super().set_targets(targets)
         self._setup_train()
+
+def checkpointed(inputs, modules):
+    @tf.contrib.layers.recompute_grad
+    def compute_checkpointed(inputs):
+        outputs = []
+        for module in modules:
+            outputs.append(module(inputs))
+            inputs = outputs[-1]
+        return outputs
+    return compute_checkpointed(inputs)
 
 def random_interpolate(a, b):
     shape = tf.concat((tf.shape(a)[0:1], tf.tile([1], [a.shape.ndims - 1])), axis=0)
@@ -170,6 +182,7 @@ def discrim_conv(batch_input, out_channels, stride, init_stddev):
 def gen_conv(batch_input, out_channels, init_stddev, separable_conv):
     # [batch, in_height, in_width, in_channels] => [batch, out_height, out_width, out_channels]
     initializer = tf.random_normal_initializer(0, init_stddev)
+    
     if separable_conv:
         return tf.layers.separable_conv2d(batch_input, out_channels, kernel_size=4, strides=(2, 2), padding="same", depthwise_initializer=initializer, pointwise_initializer=initializer)
     else:
@@ -178,12 +191,12 @@ def gen_conv(batch_input, out_channels, init_stddev, separable_conv):
 def gen_deconv(batch_input, out_channels, init_stddev, separable_conv):
     # [batch, in_height, in_width, in_channels] => [batch, out_height, out_width, out_channels]
     initializer = tf.random_normal_initializer(0, init_stddev)
-    if separable_conv:
-        _b, h, w, _c = batch_input.shape
-        resized_input = tf.image.resize_images(batch_input, [h * 2, w * 2], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        return tf.layers.separable_conv2d(resized_input, out_channels, kernel_size=4, strides=(1, 1), padding="same", depthwise_initializer=initializer, pointwise_initializer=initializer)
-    else:
-        return tf.layers.conv2d_transpose(batch_input, out_channels, kernel_size=4, strides=(2, 2), padding="same", kernel_initializer=initializer)
+    #if separable_conv:
+    #    _b, h, w, _c = batch_input.shape
+    #    resized_input = tf.image.resize_images(batch_input, [h * 2, w * 2], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+    #    return tf.layers.separable_conv2d(resized_input, out_channels, kernel_size=4, strides=(1, 1), padding="same", depthwise_initializer=initializer, pointwise_initializer=initializer)
+    #else:
+    return tf.layers.conv2d_transpose(batch_input, out_channels, kernel_size=4, strides=(2, 2), padding="same", kernel_initializer=initializer)
 
 def batchnorm(inputs, init_stddev):
     return tf.layers.batch_normalization(inputs, axis=3, epsilon=1e-5, momentum=0.1, training=True, gamma_initializer=tf.random_normal_initializer(1.0, init_stddev))
@@ -192,6 +205,8 @@ def layernorm(inputs):
     return tf.contrib.layers.layer_norm(inputs)
 
 def create_generator(args, generator_inputs, generator_outputs_channels):
+    initializer = tf.random_normal_initializer(0, args["init_stddev"])
+
     layers = []
 
     # encoder_1: [batch, 256, 256, in_channels] => [batch, 128, 128, ngf]
@@ -209,14 +224,30 @@ def create_generator(args, generator_inputs, generator_outputs_channels):
         args["ngf"] * 8, # encoder_8: [batch, 2, 2, ngf * 8] => [batch, 1, 1, ngf * 8]
     ]
 
-    for out_channels in layer_specs:
-        with tf.variable_scope("encoder_%d" % (len(layers) + 1)):
-            rectified = tf.nn.leaky_relu(layers[-1], 0.2)
-            # [batch, in_height, in_width, in_channels] => [batch, in_height/2, in_width/2, out_channels]
-            convolved = gen_conv(rectified, out_channels, args["init_stddev"], args["separable_conv"])
+    def _up_layers(specs):
+        cp_modules = []
+        is_output_layer = []
+        for layer_spec in specs:
+            cp_modules.append(tf.keras.layers.LeakyReLU(0.2))
+            is_output_layer.append(False)
+
+            cp_modules.append(tf.keras.layers.Conv2D(layer_spec, kernel_size=4, strides=(2, 2), padding="same", kernel_initializer=initializer) if not args["separable_conv"] else
+                                tf.keras.layers.SeparableConv2D(layer_spec, kernel_size=4, strides=(2, 2), padding="same", depthwise_initializer=initializer, pointwise_initializer=initializer))
+            is_output_layer.append(True)
+
             if not args["no_gen_bn"]:
-                convolved = layernorm(convolved) if args["layer_norm"] else batchnorm(convolved, args["init_stddev"])
-            layers.append(convolved)
+                cp_modules.append(tf.keras.layers.BatchNormalization())
+                is_output_layer[-1] = False
+                is_output_layer.append(True)
+        
+        cp_module_outputs = checkpointed(layers[-1], cp_modules)
+        assert len(is_output_layer) == len(cp_module_outputs)
+        for is_output, cp_module_output in zip(is_output_layer, cp_module_outputs):
+            if is_output:
+                layers.append(cp_module_output)
+
+    _up_layers(layer_specs[:3])
+    _up_layers(layer_specs[3:])
 
     layer_specs = [
         (args["ngf"] * 8, 0.5),   # decoder_8: [batch, 1, 1, ngf * 8] => [batch, 2, 2, ngf * 8 * 2]
@@ -228,27 +259,54 @@ def create_generator(args, generator_inputs, generator_outputs_channels):
         (args["ngf"], 0.0),       # decoder_2: [batch, 64, 64, ngf * 2 * 2] => [batch, 128, 128, ngf * 2]
     ]
 
-    num_encoder_layers = len(layers)
-    for decoder_layer, (out_channels, dropout) in enumerate(layer_specs):
-        skip_layer = num_encoder_layers - decoder_layer - 1
-        with tf.variable_scope("decoder_%d" % (skip_layer + 1)):
-            if decoder_layer == 0:
-                # first decoder layer doesn't have skip connections
-                # since it is directly connected to the skip_layer
-                input = layers[-1]
-            else:
-                input = tf.concat([layers[-1], layers[skip_layer]], axis=3)
+    def get_concat_fn(layer_index):
+        def concat(inputs):
+            return tf.concat([inputs, layers[layer_index]], axis=-1)
+        return concat
 
-            rectified = tf.nn.relu(input)
-            # [batch, in_height, in_width, in_channels] => [batch, in_height*2, in_width*2, out_channels]
-            output = gen_deconv(rectified, out_channels, args["init_stddev"], args["separable_conv"])
+    def _down_layers(specs, first_layer_id):
+        cp_modules = []
+        is_output_layer = []
+        for decoder_layer, (out_channels, dropout) in enumerate(specs):
+            decoder_layer += first_layer_id
+            if decoder_layer != 0:
+                skip_layer = num_encoder_layers - decoder_layer - 1
+                cp_modules.append(get_concat_fn(skip_layer))
+                is_output_layer.append(False)
+
+            cp_modules.append(tf.keras.layers.ReLU())
+            is_output_layer.append(False)
+
+            #if not args["separable_conv"]:
+            cp_modules.append(tf.keras.layers.Conv2DTranspose(out_channels, kernel_size=4, strides=(2, 2), padding="same", kernel_initializer=initializer))
+            is_output_layer.append(True)
+            #else:
+                #def _resize(inputs):
+                #    _b, h, w, _c = inputs.shape
+                #    return tf.image.resize_images(inputs, [h * 2, w * 2], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+                #cp_modules.append(_resize)
+                #is_output_layer.append(False)
+                #cp_modules.append(tf.keras.layers.SeparableConv2D(out_channels, kernel_size=4, strides=(1, 1), padding="same", depthwise_initializer=initializer, pointwise_initializer=initializer))
+                #is_output_layer.append(True)
+
             if not args["no_gen_bn"]:
-                output = layernorm(output) if args["layer_norm"] else batchnorm(output, args["init_stddev"])
-
+                cp_modules.append(tf.keras.layers.BatchNormalization())
+                is_output_layer[-1] = False
+                is_output_layer.append(True)
+            
             if dropout > 0.0:
-                output = tf.nn.dropout(output, keep_prob=1 - dropout)
+                cp_modules.append(tf.keras.layers.Dropout(dropout))
+                is_output_layer[-1] = False
+                is_output_layer.append(True)
+        
+        cp_module_outputs = checkpointed(layers[-1], cp_modules)
+        for is_output, cp_module_output in zip(is_output_layer, cp_module_outputs):
+            if is_output:
+                layers.append(cp_module_output)
 
-            layers.append(output)
+    num_encoder_layers = len(layers)
+    _down_layers(layer_specs[:3], 0)
+    _down_layers(layer_specs[3:], 3)
 
     # decoder_1: [batch, 128, 128, ngf * 2] => [batch, 256, 256, generator_outputs_channels]
     with tf.variable_scope("decoder_1"):
@@ -280,24 +338,34 @@ def create_discriminator(args, discrim_inputs, discrim_targets):
     # 2x [batch, height, width, in_channels] => [batch, height, width, in_channels * 2]
     input = tf.concat([discrim_inputs, discrim_targets], axis=3)
 
+    #output = checkpointed(input, [
+        #tf.keras.layers.Conv2D(args["ndf"], 2, )
+        #tf.layers.conv2d(padded_input, out_channels, kernel_size=4, strides=(stride, stride), padding="valid", kernel_initializer=tf.random_normal_initializer(0, init_stddev))
+    #])[-1]
+
     # layer_1: [batch, 256, 256, in_channels * 2] => [batch, 128, 128, ndf]
     with tf.variable_scope("layer_1"):
         convolved = discrim_conv(input, args["ndf"], 2, args["init_stddev"])
-        rectified = tf.nn.leaky_relu(convolved, 0.2)
+        rectified = tf.nn.leaky_relu(convolved)
         layers.append(rectified)
 
     # layer_2: [batch, 128, 128, ndf] => [batch, 64, 64, ndf * 2]
     # layer_3: [batch, 64, 64, ndf * 2] => [batch, 32, 32, ndf * 4]
     # layer_4: [batch, 32, 32, ndf * 4] => [batch, 31, 31, ndf * 8]
-    for i in range(n_layers):
-        with tf.variable_scope("layer_%d" % (len(layers) + 1)):
-            out_channels = args["ndf"] * min(2**(i+1), 8)
-            stride = 1 if i == n_layers - 1 else 2  # last layer here has stride 1
-            convolved = discrim_conv(layers[-1], out_channels, stride, args["init_stddev"])
-            if not args["no_disc_bn"]:
-                convolved = layernorm(convolved) if args["layer_norm"] else batchnorm(convolved, args["init_stddev"])
-            rectified = tf.nn.leaky_relu(convolved, 0.2)
-            layers.append(rectified)
+    @tf.contrib.layers.recompute_grad
+    def conv_2(inputs):
+        for i in range(n_layers):
+            with tf.variable_scope("layer_%d" % (len(layers) + 1)):
+                out_channels = args["ndf"] * min(2**(i+1), 8)
+                stride = 1 if i == n_layers - 1 else 2  # last layer here has stride 1
+                convolved = discrim_conv(inputs, out_channels, stride, args["init_stddev"])
+                if not args["no_disc_bn"]:
+                    convolved = layernorm(convolved) if args["layer_norm"] else batchnorm(convolved, args["init_stddev"])
+                inputs = tf.nn.leaky_relu(convolved)
+                layers.append(inputs)
+        return inputs
+    
+    conv_2(layers[-1])
 
     # layer_5: [batch, 31, 31, ndf * 8] => [batch, 30, 30, 1]
     with tf.variable_scope("layer_%d" % (len(layers) + 1)):
