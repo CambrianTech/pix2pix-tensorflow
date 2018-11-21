@@ -109,31 +109,29 @@ class Pix2PixModel(cambrian.nn.ModelBase):
             self.metrics["disc_gp"] = gradient_penalty
 
         # Summaries
-        # with tf.name_scope("inputs_summary"):
-        #     tf.summary.image("inputs", tf.image.convert_image_dtype(self.inputs, dtype=tf.uint8, saturate=True))
-
-        # with tf.name_scope("targets_summary"):
-        #     tf.summary.image("targets", tf.image.convert_image_dtype(self.targets, dtype=tf.uint8, saturate=True))
-
-        # summaries
         with tf.name_scope("inputs_summary"):
-            a_input_dir_count = len(self.args["a_input"])
+            a_input_dir_count = 1 if isinstance(self.args["a_input"], str) else len(self.args["a_input"])
             channel_index = 0
             for i in range(a_input_dir_count):
-                i_channels = input_channels[0] if len(input_channels) == 1 else input_channels[i]
+                i_channels = self.args["a_channels"][0] if len(self.args["a_channels"]) == 1 else self.args["a_channels"][i]
                 tf.summary.image("inputs_%d" % i, self.inputs[:, :, :, channel_index:channel_index+i_channels])
                 channel_index += i_channels
 
         with tf.name_scope("targets_summary"):
-            b_input_dir_count = len(self.args["b_input"])
+            b_input_dir_count = 1 if isinstance(self.args["b_input"], str) else len(self.args["b_input"])
             channel_index = 0
             for i in range(b_input_dir_count):
-                o_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
+                o_channels = self.args["b_channels"][0] if len(self.args["b_channels"]) == 1 else self.args["b_channels"][i]
                 tf.summary.image("targets_%d" % i, self.targets[:, :, :, channel_index:channel_index+o_channels])
                 channel_index += o_channels
 
         with tf.name_scope("outputs_summary"):
-            tf.summary.image("outputs", tf.image.convert_image_dtype(self.outputs, dtype=tf.uint8, saturate=True))
+            b_input_dir_count = 1 if isinstance(self.args["b_input"], str) else len(self.args["b_input"])
+            channel_index = 0
+            for i in range(b_input_dir_count):
+                o_channels = self.args["b_channels"][0] if len(self.args["b_channels"]) == 1 else self.args["b_channels"][i]
+                tf.summary.image("outputs_%d" % i, self.outputs[:, :, :, channel_index:channel_index+o_channels])
+                channel_index += o_channels
 
         with tf.name_scope("predict_real_summary"):
             tf.summary.image("predict_real", tf.image.convert_image_dtype(predict_real, dtype=tf.uint8))
