@@ -22,69 +22,90 @@ class Pix2PixModel(cambrian.nn.ModelBase):
         if self.is_train_setup:
             raise Exception("Train was already set up.")
 
-         # create two copies of discriminator, one for real pairs and one for fake pairs
-        # they share the same underlying variables
-        with tf.name_scope("real_discriminator"):
-            with tf.variable_scope("discriminator"):
-                # 2x [batch, height, width, channels] => [batch, 30, 30, 1]
-                predict_real = create_discriminator(self.args, self.inputs, self.targets)
+        real_inputs = [self.targets]
+        fake_inputs = [self.outputs]
+        img_inputs = [self.inputs]
 
-        with tf.name_scope("fake_discriminator"):
-            with tf.variable_scope("discriminator", reuse=True):
-                # 2x [batch, height, width, channels] => [batch, 30, 30, 1]
-                predict_fake = create_discriminator(self.args, self.inputs, self.outputs)
+        # Collect the losses for different scales and average them later
+        multiscale_gradient_penalties = [] if self.args["gp_weight"] and self.args["gp_weight"] > 0 else None
+        multiscale_gen_losses_gan = []
+        multiscale_discrim_losses_gan = []
 
-        with tf.name_scope("discriminator_loss"):
-            # minimizing -tf.log will try to get inputs to 1
-            # predict_real => 1
-            # predict_fake => 0
-            if self.args["gan_loss"] == "gan":
-                discrim_loss = tf.reduce_mean(-(tf.log(tf.sigmoid(predict_real) + EPS) + tf.log(1 - tf.sigmoid(predict_fake) + EPS)))
-            elif self.args["gan_loss"] == "wgan":
-                discrim_loss = tf.reduce_mean(predict_fake - predict_real)
-            elif self.args["gan_loss"] == "ganqp":
-                diff = self.outputs - self.targets
-                # They chose a 10x multiplier for the norm in the paper, but seems like another hyperparameter.
-                # Also choosing L1 norm instead of L2 works but L2 gave them slightly better results.
-                norm_axes = list(range(1, len(diff.shape))) # All axes except first (batch)
-                norm = 10 * tf.sqrt(tf.reduce_mean(tf.square(diff), axis=norm_axes, keepdims=True))
-                #norm = 10 * tf.reduce_mean(tf.abs(diff), axis=norm_axes, keepdims=True)
-                disc_diff = predict_fake - predict_real
-                discrim_loss = tf.reduce_mean(disc_diff + 0.5 * tf.square(disc_diff) / norm)
-            else:
-                raise Exception("Unknown gan_loss:", self.args["gan_loss"])
+        for _ in range(self.args["num_downsampled_discs"]):
+            size = real_inputs[-1].shape[1:3]
+            assert size == fake_inputs[-1].shape[1:3]
+            assert size == img_inputs[-1].shape[1:3]
+            real_inputs.append(tf.image.resize_images(real_inputs[-1], (size[0] // 2, size[1] // 2), tf.image.ResizeMethod.NEAREST_NEIGHBOR))
+            fake_inputs.append(tf.image.resize_images(fake_inputs[-1], (size[0] // 2, size[1] // 2), tf.image.ResizeMethod.NEAREST_NEIGHBOR))
+            img_inputs.append(tf.image.resize_images(img_inputs[-1], (size[0] // 2, size[1] // 2), tf.image.ResizeMethod.NEAREST_NEIGHBOR))
 
-        with tf.name_scope("generator_loss"):
-            # predict_fake => 1
-            # abs(self.targets - self.outputs) => 0
-            if self.args["gan_loss"] == "gan":
-                gen_loss_GAN = tf.reduce_mean(-tf.log(tf.sigmoid(predict_fake) + EPS))
-            elif self.args["gan_loss"] == "wgan" or self.args["gan_loss"] == "ganqp":
-                gen_loss_GAN = -tf.reduce_mean(predict_fake)
-            else:
-                raise Exception("Unknown gan_loss:", self.args["gan_loss"])
+        for scale_index, (inputs, outputs, targets) in enumerate(reversed(list(zip(img_inputs, fake_inputs, real_inputs)))):
+            # create two copies of discriminator, one for real pairs and one for fake pairs
+            # they share the same underlying variables
+            with tf.name_scope("real_discriminator_%d" % scale_index):
+                with tf.variable_scope("discriminator_%d" % scale_index):
+                    # 2x [batch, height, width, channels] => [batch, 30, 30, 1]
+                    predict_real = create_discriminator(self.args, inputs, targets)
 
-            gen_loss_L1 = tf.reduce_mean(tf.abs(self.targets - self.outputs))
-            gen_loss = gen_loss_GAN * self.args["gan_weight"] + gen_loss_L1 * self.args["l1_weight"]
+            with tf.name_scope("fake_discriminator_%d" % scale_index):
+                with tf.variable_scope("discriminator_%d" % scale_index, reuse=True):
+                    # 2x [batch, height, width, channels] => [batch, 30, 30, 1]
+                    predict_fake = create_discriminator(self.args, inputs, outputs)
 
-         # Gradient penalty
-        if self.args["gp_weight"] is not None and self.args["gp_weight"] > 0:
-            with tf.name_scope("gradient_penalty"):
-                rand_interp = random_interpolate(self.targets, self.outputs)
-                with tf.variable_scope("discriminator", reuse=True):
-                    predict_rand_interp = create_discriminator(self.args, self.inputs, rand_interp)
-                gradient_penalty = self.args["gp_weight"] * get_gradient_penalty(self.args, predict_rand_interp, rand_interp)
-        else:
-            gradient_penalty = None
+            with tf.name_scope("discriminator_loss_%d" % scale_index):
+                # minimizing -tf.log will try to get inputs to 1
+                # predict_real => 1
+                # predict_fake => 0
+                if self.args["gan_loss"] == "gan":
+                    discrim_loss = tf.reduce_mean(-(tf.log(tf.sigmoid(predict_real) + EPS) + tf.log(1 - tf.sigmoid(predict_fake) + EPS)))
+                elif self.args["gan_loss"] == "wgan":
+                    discrim_loss = tf.reduce_mean(predict_fake - predict_real)
+                elif self.args["gan_loss"] == "ganqp":
+                    diff = outputs - targets
+                    # They chose a 10x multiplier for the norm in the paper, but seems like another hyperparameter.
+                    # Also choosing L1 norm instead of L2 works but L2 gave them slightly better results.
+                    norm_axes = list(range(1, len(diff.shape))) # All axes except first (batch)
+                    norm = 10 * tf.sqrt(tf.reduce_mean(tf.square(diff), axis=norm_axes, keepdims=True))
+                    #norm = 10 * tf.reduce_mean(tf.abs(diff), axis=norm_axes, keepdims=True)
+                    disc_diff = predict_fake - predict_real
+                    discrim_loss = tf.reduce_mean(disc_diff + 0.5 * tf.square(disc_diff) / norm)
+                else:
+                    raise Exception("Unknown gan_loss:", self.args["gan_loss"])
+                multiscale_discrim_losses_gan.append(discrim_loss)
+
+            with tf.name_scope("generator_loss_%d" % scale_index):
+                # predict_fake => 1
+                # abs(self.targets - self.outputs) => 0
+                if self.args["gan_loss"] == "gan":
+                    gen_loss_GAN = tf.reduce_mean(-tf.log(tf.sigmoid(predict_fake) + EPS))
+                elif self.args["gan_loss"] == "wgan" or self.args["gan_loss"] == "ganqp":
+                    gen_loss_GAN = -tf.reduce_mean(predict_fake)
+                else:
+                    raise Exception("Unknown gan_loss:", self.args["gan_loss"])
+                multiscale_gen_losses_gan.append(gen_loss_GAN)
+
+            # Gradient penalty
+            if multiscale_gradient_penalties is not None:
+                with tf.name_scope("gradient_penalty_%d" % scale_index):
+                    rand_interp = random_interpolate(targets, outputs)
+                    with tf.variable_scope("discriminator_%d" % scale_index, reuse=True):
+                        predict_rand_interp = create_discriminator(self.args, inputs, rand_interp)
+                    gradient_penalty = self.args["gp_weight"] * get_gradient_penalty(self.args, predict_rand_interp, rand_interp)
+                    multiscale_gradient_penalties.append(gradient_penalty)
+
+        # Calculate actual losses averaging over multiscale
+        gen_loss_GAN = tf.reduce_mean(multiscale_gen_losses_gan)
+        discrim_loss = tf.reduce_mean(multiscale_discrim_losses_gan)
+        discrim_total_loss = discrim_loss
+        gen_loss_L1 = tf.reduce_mean(tf.abs(self.targets - self.outputs))
+        gen_loss = gen_loss_GAN * self.args["gan_weight"] + gen_loss_L1 * self.args["l1_weight"]
+        gradient_penalty = None if multiscale_gradient_penalties is None else tf.reduce_mean(multiscale_gradient_penalties) * self.args["gp_weight"]
+        if gradient_penalty is not None:
+            discrim_total_loss += gradient_penalty
 
         with tf.name_scope("discriminator_train"):
             discrim_tvars = [var for var in tf.trainable_variables() if var.name.startswith("discriminator")]
             discrim_optim = tf.train.AdamOptimizer(self.args["lr_d"], self.args["beta1"], self.args["beta2"])
-
-            discrim_total_loss = discrim_loss
-            if gradient_penalty is not None:
-                discrim_total_loss += gradient_penalty
-
             discrim_grads_and_vars = discrim_optim.compute_gradients(discrim_total_loss, var_list=discrim_tvars)
             discrim_train = discrim_optim.apply_gradients(discrim_grads_and_vars)
 
@@ -107,6 +128,11 @@ class Pix2PixModel(cambrian.nn.ModelBase):
         self.metrics["disc_total"] = discrim_total_loss
         if gradient_penalty is not None:
             self.metrics["disc_gp"] = gradient_penalty
+            for scale_index, gp in enumerate(multiscale_gradient_penalties):
+                self.metrics["disc_gp_%d" % scale_index] = gp
+        for scale_index, (d_loss, g_loss) in enumerate(zip(multiscale_discrim_losses_gan, multiscale_gen_losses_gan)):
+            self.metrics["disc_loss_%d" % scale_index] = d_loss
+            self.metrics["gen_loss_%d" % scale_index] = g_loss
 
         # Summaries
         for spec in self.args["a_specs"]:
@@ -128,6 +154,7 @@ class Pix2PixModel(cambrian.nn.ModelBase):
         with tf.name_scope("scalar_summaries"):
             tf.summary.scalar("discriminator_loss", discrim_loss)
             tf.summary.scalar("generator_loss_GAN", gen_loss_GAN)
+
             tf.summary.scalar("generator_loss_L1", gen_loss_L1)
 
             if self.args["gan_loss"] == "wgan" or self.args["gan_loss"] == "ganqp":
@@ -135,6 +162,15 @@ class Pix2PixModel(cambrian.nn.ModelBase):
 
             if gradient_penalty is not None:
                 tf.summary.scalar("gradient_penalty", gradient_penalty)
+
+        if len(multiscale_discrim_losses_gan) > 1:
+            with tf.name_scope("multiscale_scalar_summaries"):
+                for scale_index, (d_loss, g_loss) in enumerate(zip(multiscale_discrim_losses_gan, multiscale_gen_losses_gan)):
+                    tf.summary.scalar("discriminator_loss_downsampled_%d" % scale_index, d_loss)
+                    tf.summary.scalar("generator_loss_downsampled_%d" % scale_index, g_loss)
+                if multiscale_gradient_penalties is not None:
+                    for scale_index, gp in enumerate(multiscale_gradient_penalties):
+                        tf.summary.scalar("gradient_penalty_downsampled_%d" % scale_index, gp)
 
         for var in tf.trainable_variables():
             tf.summary.histogram(var.op.name + "/values", var)
