@@ -45,6 +45,7 @@ def pix2pix_config():
         "gp_weight": 0,
         "l1_weight": 100.0,
         "gan_weight": 1.0,
+        "num_downsampled_discs": 0,
         
         "num_gpus": 1,
 
