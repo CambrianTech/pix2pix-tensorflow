@@ -81,16 +81,14 @@ def get_specs_from_args(args):
     if scale_size <= 0:
         scale_size = crop_size
 
-    # Combine a and b so we can process them together
-    # and split them after
-    matches = a_input + b_input
-    channels = a_channels + b_channels
+    # Create the specs
+    def _make_specs(inputs, channels):
+        return [cambrian.nn.IOSpecification(index, start_channel, match_path, chans, scale_size, crop_size)
+                for index, (start_channel, (match_path, chans))
+                in enumerate(cambrian.utils.count_up(zip(inputs, channels), lambda mc: mc[1]))]
 
-    specs = [cambrian.nn.IOSpecification(m, c, scale_size, crop_size)
-                for m, c in zip(matches, channels)]
-
-    a_specs = specs[:num_a]
-    b_specs = specs[num_a:]
+    a_specs = _make_specs(a_input, a_channels)
+    b_specs = _make_specs(b_input, b_channels)
 
     return a_specs, b_specs
 
