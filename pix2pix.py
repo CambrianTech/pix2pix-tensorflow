@@ -19,6 +19,8 @@ def pix2pix_config():
         "b_input": [],
         "a_channels": [3],
         "b_channels": [3],
+        "a_eval": [],
+        "b_eval": [],
 
         "mode": "train",
         "model_dir": "models",
@@ -56,14 +58,14 @@ def pix2pix_config():
         "angle_output": False,
     }
 
-def get_specs_from_args(args):
+def get_specs_from_args(args, a_input_key, b_input_key):
     # If we only have single elements for inputs or channels
     # make a list out of them
     def ensure_list(x):
         if not isinstance(x, list) and not isinstance(x, tuple):
             return [x]
         return x
-    a_input, b_input = ensure_list(args["a_input"]), ensure_list(args["b_input"])
+    a_input, b_input = ensure_list(args[a_input_key]), ensure_list(args[b_input_key])
     a_channels, b_channels = ensure_list(args["a_channels"]), ensure_list(args["b_channels"])
 
     num_a, num_b = len(a_input), len(b_input)
@@ -114,11 +116,19 @@ def main(args, _seed):
         session_config=session_config,
 	)
 
-    a_specs, b_specs = get_specs_from_args(args)
+    # Get train specifiers (describes channels, paths etc.)
+    a_specs, b_specs = get_specs_from_args(args, "a_input", "b_input")
     args["a_specs"], args["b_specs"] = a_specs, b_specs
 
-    print("A specs:", a_specs)
-    print("B specs:", b_specs)
+    # Get eval specifiers if an eval set was given
+    a_specs_eval, b_specs_eval = None, None if len(args["a_eval"]) == 0 or len(args["b_eval"]) == 0 else get_specs_from_args(args, "a_eval", "b_eval")
+    assert a_specs_eval is None or len(a_specs) == len(a_specs_eval)
+    assert b_specs_eval is None or len(b_specs) == len(b_specs_eval)
+
+    print("A train specs:", a_specs)
+    print("B train specs:", b_specs)
+    print("A eval specs:", a_specs_eval)
+    print("B eval specs:", b_specs_eval)
 
     model = Pix2PixModel(args)
     model_fn = cambrian.nn.get_model_fn_ab(model, a_specs, b_specs)
@@ -130,13 +140,18 @@ def main(args, _seed):
     if args["mode"] == "train":
         train_input_fn_args = cambrian.nn.InputFnArgs.train(epochs=args["epochs"], batch_size=args["batch_size"])
         train_input_fn = cambrian.nn.get_input_fn_ab(a_specs, b_specs, train_input_fn_args)
-        train_spec = tf.estimator.TrainSpec(train_input_fn)
+        
+        # Train and eval if eval set was given, otherwise just train
+        if a_specs_eval is not None and b_specs_eval is not None:
+            train_spec = tf.estimator.TrainSpec(train_input_fn)
 
-        eval_input_fn_args = cambrian.nn.InputFnArgs.eval(epochs=args["epochs"], batch_size=args["batch_size"])
-        eval_input_fn = cambrian.nn.get_input_fn_ab(a_specs, b_specs, eval_input_fn_args)
-        eval_spec = tf.estimator.EvalSpec(eval_input_fn)
+            eval_input_fn_args = cambrian.nn.InputFnArgs.eval(epochs=args["epochs"], batch_size=args["batch_size"])
+            eval_input_fn = cambrian.nn.get_input_fn_ab(a_specs, b_specs, eval_input_fn_args)
+            eval_spec = tf.estimator.EvalSpec(eval_input_fn)
 
-        tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+            tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+        else:
+            estimator.train(train_input_fn)
     elif args["mode"] == "test":
         eval_input_fn_args = cambrian.nn.InputFnArgs.eval(epochs=args["epochs"], batch_size=args["batch_size"])
         eval_input_fn = cambrian.nn.get_input_fn_ab(a_specs, b_specs, eval_input_fn_args)
