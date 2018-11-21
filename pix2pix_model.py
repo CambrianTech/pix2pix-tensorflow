@@ -109,8 +109,10 @@ class Pix2PixModel(cambrian.nn.ModelBase):
             self.metrics["disc_gp"] = gradient_penalty
 
         # Summaries
+        a_input_dir_count = 1 if isinstance(self.args["a_input"], str) else len(self.args["a_input"])
+        b_input_dir_count = 1 if isinstance(self.args["b_input"], str) else len(self.args["b_input"])
+
         with tf.name_scope("inputs_summary"):
-            a_input_dir_count = 1 if isinstance(self.args["a_input"], str) else len(self.args["a_input"])
             channel_index = 0
             for i in range(a_input_dir_count):
                 i_channels = self.args["a_channels"][0] if len(self.args["a_channels"]) == 1 else self.args["a_channels"][i]
@@ -118,7 +120,6 @@ class Pix2PixModel(cambrian.nn.ModelBase):
                 channel_index += i_channels
 
         with tf.name_scope("targets_summary"):
-            b_input_dir_count = 1 if isinstance(self.args["b_input"], str) else len(self.args["b_input"])
             channel_index = 0
             for i in range(b_input_dir_count):
                 o_channels = self.args["b_channels"][0] if len(self.args["b_channels"]) == 1 else self.args["b_channels"][i]
