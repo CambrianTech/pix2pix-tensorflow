@@ -58,7 +58,7 @@ class Pix2PixModel(cambrian.nn.ModelBase):
             if self.args["gan_loss"] == "gan":
                 gen_loss_GAN = tf.reduce_mean(-tf.log(tf.sigmoid(predict_fake) + EPS))
             elif self.args["gan_loss"] == "wgan" or self.args["gan_loss"] == "ganqp":
-                gen_loss_GAN = tf.reduce_mean(predict_real - predict_fake)
+                gen_loss_GAN = -tf.reduce_mean(predict_fake)
             else:
                 raise Exception("Unknown gan_loss:", self.args["gan_loss"])
 
@@ -127,7 +127,7 @@ class Pix2PixModel(cambrian.nn.ModelBase):
             tf.summary.scalar("generator_loss_GAN", gen_loss_GAN)
             tf.summary.scalar("generator_loss_L1", gen_loss_L1)
 
-            if self.args["gan_loss"] == "wgan":
+            if self.args["gan_loss"] == "wgan" or self.args["gan_loss"] == "ganqp":
                 tf.summary.scalar("wgan_d_minus_g", discrim_loss - gen_loss_GAN)
 
             if gradient_penalty is not None:
