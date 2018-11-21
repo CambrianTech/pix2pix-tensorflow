@@ -135,8 +135,8 @@ class Pix2PixModel(cambrian.nn.ModelBase):
                     o_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
                     tf.summary.image("targets_%d" % i, self.targets[:, :, :, channel_index:channel_index+o_channels])
                     channel_index += o_channels
-        else:
-            tf.summary.image("targets", self.targets[:, :, :, :int(output_channels[0])])
+            else:
+                tf.summary.image("targets", self.targets[:, :, :, :int(output_channels[0])])
 
         with tf.name_scope("outputs_summary"):
             tf.summary.image("outputs", tf.image.convert_image_dtype(self.outputs, dtype=tf.uint8, saturate=True))
