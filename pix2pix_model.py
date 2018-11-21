@@ -117,8 +117,8 @@ class Pix2PixModel(cambrian.nn.ModelBase):
 
         # summaries
         with tf.name_scope("inputs_summary"):
-            if args["a_input_dir"] is not None:
-                a_input_dir_count = len(args["a_input"])
+            if self.args["a_input_dir"] is not None:
+                a_input_dir_count = len(self.args["a_input"])
                 channel_index = 0
                 for i in range(a_input_dir_count):
                     i_channels = input_channels[0] if len(input_channels) == 1 else input_channels[i]
@@ -128,8 +128,8 @@ class Pix2PixModel(cambrian.nn.ModelBase):
                 tf.summary.image("inputs", self.inputs[:, :, :, :int(input_channels[0])])
 
         with tf.name_scope("targets_summary"):
-            if args["b_input_dir"] is not None:
-                b_input_dir_count = len(args["b_input"])
+            if self.args["b_input_dir"] is not None:
+                b_input_dir_count = len(self.args["b_input"])
                 channel_index = 0
                 for i in range(b_input_dir_count):
                     o_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
