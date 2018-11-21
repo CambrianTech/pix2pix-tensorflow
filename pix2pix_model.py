@@ -109,11 +109,34 @@ class Pix2PixModel(cambrian.nn.ModelBase):
             self.metrics["disc_gp"] = gradient_penalty
 
         # Summaries
+        # with tf.name_scope("inputs_summary"):
+        #     tf.summary.image("inputs", tf.image.convert_image_dtype(self.inputs, dtype=tf.uint8, saturate=True))
+
+        # with tf.name_scope("targets_summary"):
+        #     tf.summary.image("targets", tf.image.convert_image_dtype(self.targets, dtype=tf.uint8, saturate=True))
+
+        # summaries
         with tf.name_scope("inputs_summary"):
-            tf.summary.image("inputs", tf.image.convert_image_dtype(self.inputs, dtype=tf.uint8, saturate=True))
+            if args["a_input_dir"] is not None:
+                a_input_dir_count = len(args["a_input"])
+                channel_index = 0
+                for i in range(a_input_dir_count):
+                    i_channels = input_channels[0] if len(input_channels) == 1 else input_channels[i]
+                    tf.summary.image("inputs_%d" % i, self.inputs[:, :, :, channel_index:channel_index+i_channels])
+                    channel_index += i_channels
+            else:
+                tf.summary.image("inputs", self.inputs[:, :, :, :int(input_channels[0])])
 
         with tf.name_scope("targets_summary"):
-            tf.summary.image("targets", tf.image.convert_image_dtype(self.targets, dtype=tf.uint8, saturate=True))
+            if args["b_input_dir"] is not None:
+                b_input_dir_count = len(args["b_input"])
+                channel_index = 0
+                for i in range(b_input_dir_count):
+                    o_channels = output_channels[0] if len(output_channels) == 1 else output_channels[i]
+                    tf.summary.image("targets_%d" % i, self.targets[:, :, :, channel_index:channel_index+o_channels])
+                    channel_index += o_channels
+        else:
+            tf.summary.image("targets", self.targets[:, :, :, :int(output_channels[0])])
 
         with tf.name_scope("outputs_summary"):
             tf.summary.image("outputs", tf.image.convert_image_dtype(self.outputs, dtype=tf.uint8, saturate=True))
