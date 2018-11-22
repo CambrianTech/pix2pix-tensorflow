@@ -35,9 +35,9 @@ class Pix2PixModel(cambrian.nn.ModelBase):
             size = real_inputs[-1].shape[1:3]
             assert size == fake_inputs[-1].shape[1:3]
             assert size == img_inputs[-1].shape[1:3]
-            real_inputs.append(tf.image.resize_images(real_inputs[-1], (size[0] // 2, size[1] // 2), tf.image.ResizeMethod.NEAREST_NEIGHBOR))
-            fake_inputs.append(tf.image.resize_images(fake_inputs[-1], (size[0] // 2, size[1] // 2), tf.image.ResizeMethod.NEAREST_NEIGHBOR))
-            img_inputs.append(tf.image.resize_images(img_inputs[-1], (size[0] // 2, size[1] // 2), tf.image.ResizeMethod.NEAREST_NEIGHBOR))
+            real_inputs.append(tf.image.resize_images(real_inputs[-1], (size[0] // 2, size[1] // 2), tf.image.ResizeMethod.BILINEAR))
+            fake_inputs.append(tf.image.resize_images(fake_inputs[-1], (size[0] // 2, size[1] // 2), tf.image.ResizeMethod.BILINEAR))
+            img_inputs.append(tf.image.resize_images(img_inputs[-1], (size[0] // 2, size[1] // 2), tf.image.ResizeMethod.BILINEAR))
 
         for scale_index, (inputs, outputs, targets) in enumerate(reversed(list(zip(img_inputs, fake_inputs, real_inputs)))):
             # create two copies of discriminator, one for real pairs and one for fake pairs
