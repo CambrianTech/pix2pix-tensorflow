@@ -105,15 +105,11 @@ def main(args, _seed):
     random.seed(_seed)
 
     distribute_strategy = cambrian.nn.get_distribution_strategy(args["num_gpus"])
-
-    session_config = tf.ConfigProto()
-    session_config.gpu_options.allow_growth = True
-
+    
     run_config = tf.estimator.RunConfig(
 		model_dir=args["model_dir"],
 		train_distribute=distribute_strategy,
 		eval_distribute=distribute_strategy,
-        session_config=session_config,
 	)
 
     # Get train specifiers (describes channels, paths etc.)
