@@ -129,9 +129,8 @@ def main(args, _seed):
     print("B train specs:", b_specs)
     print("A eval specs:", a_specs_eval)
     print("B eval specs:", b_specs_eval)
-
-    model = Pix2PixModel(args)
-    model_fn = cambrian.nn.get_model_fn_ab(model, a_specs, b_specs)
+    
+    model_fn = cambrian.nn.get_model_fn_ab(Pix2PixModel, a_specs, b_specs, args=args)
 
     estimator = tf.estimator.Estimator(model_fn=model_fn, config=run_config, params=args)
 
