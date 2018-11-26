@@ -135,50 +135,54 @@ class Pix2PixModel(cambrian.nn.ModelBase):
             self.metrics["gen_loss_%d" % scale_index] = g_loss
 
         # Summaries
+        summaries = []
+
         for spec in self.args["a_specs"]:
             with tf.name_scope("inputs_summary"):
-                tf.summary.image("inputs_%d" % spec.index, tf.image.convert_image_dtype(self.inputs[:, :, :, spec.start_channel:spec.start_channel+spec.channels], dtype=tf.uint8))
+                summaries.append(tf.summary.image("inputs_%d" % spec.index, tf.image.convert_image_dtype(self.inputs[:, :, :, spec.start_channel:spec.start_channel+spec.channels], dtype=tf.uint8)))
         
         for spec in self.args["b_specs"]:
             with tf.name_scope("targets_summary"):
-                tf.summary.image("targets_%d" % spec.index, tf.image.convert_image_dtype(self.targets[:, :, :, spec.start_channel:spec.start_channel+spec.channels], dtype=tf.uint8))
+                summaries.append(tf.summary.image("targets_%d" % spec.index, tf.image.convert_image_dtype(self.targets[:, :, :, spec.start_channel:spec.start_channel+spec.channels], dtype=tf.uint8)))
             with tf.name_scope("outputs_summary"):
-                tf.summary.image("outputs_%d" % spec.index, tf.image.convert_image_dtype(self.outputs[:, :, :, spec.start_channel:spec.start_channel+spec.channels], dtype=tf.uint8))
+                summaries.append(tf.summary.image("outputs_%d" % spec.index, tf.image.convert_image_dtype(self.outputs[:, :, :, spec.start_channel:spec.start_channel+spec.channels], dtype=tf.uint8)))
 
         with tf.name_scope("predict_real_summary"):
-            tf.summary.image("predict_real", tf.image.convert_image_dtype(predict_real, dtype=tf.uint8))
+            summaries.append(tf.summary.image("predict_real", tf.image.convert_image_dtype(predict_real, dtype=tf.uint8)))
 
         with tf.name_scope("predict_fake_summary"):
-            tf.summary.image("predict_fake", tf.image.convert_image_dtype(predict_fake, dtype=tf.uint8))
+            summaries.append(tf.summary.image("predict_fake", tf.image.convert_image_dtype(predict_fake, dtype=tf.uint8)))
 
         with tf.name_scope("scalar_summaries"):
-            tf.summary.scalar("discriminator_loss", discrim_loss)
-            tf.summary.scalar("generator_loss_GAN", gen_loss_GAN)
+            summaries.append(tf.summary.scalar("discriminator_loss", discrim_loss))
+            summaries.append(tf.summary.scalar("generator_loss_GAN", gen_loss_GAN))
 
-            tf.summary.scalar("generator_loss_L1", gen_loss_L1)
+            summaries.append(tf.summary.scalar("generator_loss_L1", gen_loss_L1))
 
             if self.args["gan_loss"] == "wgan" or self.args["gan_loss"] == "ganqp":
-                tf.summary.scalar("wgan_d_minus_g", discrim_loss - gen_loss_GAN)
+                summaries.append(tf.summary.scalar("wgan_d_minus_g", discrim_loss - gen_loss_GAN))
 
             if gradient_penalty is not None:
-                tf.summary.scalar("gradient_penalty", gradient_penalty)
+                summaries.append(tf.summary.scalar("gradient_penalty", gradient_penalty))
 
         if len(multiscale_discrim_losses_gan) > 1:
             with tf.name_scope("multiscale_scalar_summaries"):
                 for scale_index, (d_loss, g_loss) in enumerate(zip(multiscale_discrim_losses_gan, multiscale_gen_losses_gan)):
-                    tf.summary.scalar("discriminator_loss_downsampled_%d" % scale_index, d_loss)
-                    tf.summary.scalar("generator_loss_downsampled_%d" % scale_index, g_loss)
+                    summaries.append(tf.summary.scalar("discriminator_loss_downsampled_%d" % scale_index, d_loss))
+                    summaries.append(tf.summary.scalar("generator_loss_downsampled_%d" % scale_index, g_loss))
                 if multiscale_gradient_penalties is not None:
                     for scale_index, gp in enumerate(multiscale_gradient_penalties):
-                        tf.summary.scalar("gradient_penalty_downsampled_%d" % scale_index, gp)
+                        summaries.append(tf.summary.scalar("gradient_penalty_downsampled_%d" % scale_index, gp))
 
         for var in tf.trainable_variables():
-            tf.summary.histogram(var.op.name + "/values", var)
+            summaries.append(tf.summary.histogram(var.op.name + "/values", var))
 
         for grad, var in discrim_grads_and_vars + gen_grads_and_vars:
             # grad can be None since we are using checkpointing
             if grad is not None:
-                tf.summary.histogram(var.op.name + "/gradients", grad)
+                summaries.append(tf.summary.histogram(var.op.name + "/gradients", grad))
+
+        self._summary_op = tf.summary.merge(summaries)
 
     def set_inputs(self, inputs):
         super().set_inputs(inputs)
