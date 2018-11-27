@@ -294,21 +294,44 @@ def create_generator(args, generator_inputs, generator_outputs_channels):
     with tf.variable_scope("decoder_1"):
         input = tf.concat([layers[-1], layers[0]], axis=3)
         rectified = tf.nn.relu(input)
-        if args["angle_output"]:
-            # Produce 3D unit vector from 2 angles
-            angle_x = gen_deconv(rectified, 1, args["init_stddev"], args["separable_conv"])
-            angle_y = gen_deconv(rectified, 1, args["init_stddev"], args["separable_conv"])
 
-            sin_x, cos_x = tf.sin(angle_x), tf.cos(angle_x)
-            sin_y, cos_y = tf.sin(angle_y), tf.cos(angle_y)
-            output_x = sin_x * cos_y
-            output_y = cos_x * cos_y
-            output_z = sin_y
+        # Make sure angle output is list of correct length
+        # TODO: Probably want this on the output spec (maybe add a dict to it or new subclass)
+        is_angle_output = args["angle_output"]
+        if not isinstance(is_angle_output, list) and not isinstance(is_angle_output, tuple):
+            is_angle_output = [is_angle_output]
+        if len(is_angle_output) != len(args["b_specs"]):
+            is_angle_output *= len(args["b_specs"])
 
-            output = tf.concat((output_x, output_y, output_z), axis=-1, name="output")
-        else:
-            output = gen_deconv(rectified, generator_outputs_channels, args["init_stddev"], args["separable_conv"])
-            output = tf.tanh(output, name="output")
+        outputs = []
+        for is_angle, output_spec in zip(is_angle_output, args["b_specs"]):
+            if is_angle:
+                assert output_spec.channels == 3
+
+                # Produce 3D unit vector from 2 angles
+                angles = gen_deconv(rectified, 2, args["init_stddev"], args["separable_conv"])
+                angle_x = angles[:, :, :, 0:1]
+                angle_y = angles[:, :, :, 1:2]
+
+                sin_x, cos_x = tf.sin(angle_x), tf.cos(angle_x)
+                sin_y, cos_y = tf.sin(angle_y), tf.cos(angle_y)
+                output_x = sin_x * cos_y
+                output_y = cos_x * cos_y
+                output_z = sin_y
+
+                output = tf.concat((output_x, output_y, output_z), axis=-1, )
+
+                # [-1, 1] -> [0, 1]
+                output = tf.div(output + 1., 2., name="output_%d" % output_spec.index)
+            else:
+                output = gen_deconv(rectified, output_spec.channels, args["init_stddev"], args["separable_conv"])
+                output = tf.sigmoid(output, name="output_%d" % output_spec.index)
+            outputs.append(output)
+
+        # Combine all outputs along channels
+        print(outputs)
+        output = tf.concat(outputs, axis=-1, name="output")
+
         layers.append(output)
 
     return layers[-1]

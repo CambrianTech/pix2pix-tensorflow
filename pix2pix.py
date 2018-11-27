@@ -55,7 +55,7 @@ def pix2pix_config():
         "no_disc_bn": False,
         "no_gen_bn": False,
         "layer_norm": False,
-        "angle_output": False,
+        "angle_output": [False],
     }
 
 def get_specs_from_args(args, a_input_key, b_input_key):
