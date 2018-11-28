@@ -36,7 +36,7 @@ def pix2pix_config():
         "crop_size": 256,
         "scale_size": 0,
 
-        "flip": True,
+        "flip": False,
         
         "lr_g": 0.0002,
         "lr_d": 0.0002,
@@ -133,7 +133,7 @@ def main(args, _seed):
     print("Start", args["mode"])
 
     if args["mode"] == "train":
-        train_input_fn_args = cambrian.nn.InputFnArgs.train(epochs=args["epochs"], batch_size=args["batch_size"])
+        train_input_fn_args = cambrian.nn.InputFnArgs.train(epochs=args["epochs"], batch_size=args["batch_size"], random_flip=args["flip"])
         train_input_fn = cambrian.nn.get_input_fn_ab(a_specs, b_specs, train_input_fn_args)
         
         # Train and eval if eval set was given, otherwise just train
