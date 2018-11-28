@@ -9,6 +9,7 @@ class Pix2PixModel(cambrian.nn.ModelBase):
         self.args = args
         self.is_general_setup = False
         self.is_train_setup = False
+        self._generator_dict = None
 
     def _setup_general(self):
         if self.is_general_setup:
@@ -16,7 +17,8 @@ class Pix2PixModel(cambrian.nn.ModelBase):
 
         with tf.variable_scope("generator"):
             out_channels = sum([spec.channels for spec in self.args["b_specs"]])
-            self._outputs = create_generator(self.args, self.inputs, out_channels)
+            self._generator_dict = create_generator(self.args, self.inputs, out_channels)
+            self._outputs = self._generator_dict["output"]
 
     def _setup_train(self):
         if self.is_train_setup:
@@ -99,9 +101,11 @@ class Pix2PixModel(cambrian.nn.ModelBase):
         discrim_total_loss = discrim_loss
 
         if self.args["metric_loss"] == "bce":
-            gen_loss_metric = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.targets, logits=self.outputs))
+            logits = self._generator_dict["logits"]
+            gen_loss_metric = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.targets, logits=logits))
         elif self.args["metric_loss"] == "ce":
-            gen_loss_metric = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.targets, logits=self.outputs))
+            logits = self._generator_dict["logits"]
+            gen_loss_metric = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.targets, logits=logits))
         elif self.args["metric_loss"] == "l1":
             gen_loss_metric = tf.reduce_mean(tf.abs(self.targets - self.outputs))
         elif self.args["metric_loss"] == "mse": 
@@ -167,8 +171,10 @@ class Pix2PixModel(cambrian.nn.ModelBase):
         with tf.name_scope("scalar_summaries"):
             summaries.append(tf.summary.scalar("discriminator_loss", discrim_loss))
             summaries.append(tf.summary.scalar("generator_loss_GAN", gen_loss_GAN))
-
             summaries.append(tf.summary.scalar("generator_loss_metric", gen_loss_metric))
+
+            summaries.append(tf.summary.scalar("discriminator_total_loss", gen_loss))
+            summaries.append(tf.summary.scalar("generator_total_loss", discrim_total_loss))
 
             if self.args["gan_loss"] == "wgan" or self.args["gan_loss"] == "ganqp":
                 summaries.append(tf.summary.scalar("wgan_d_minus_g", discrim_loss - gen_loss_GAN))
@@ -243,6 +249,7 @@ def layernorm(inputs):
     return tf.contrib.layers.layer_norm(inputs)
 
 def create_generator(args, generator_inputs, generator_outputs_channels):
+    output_dict = {}
     layers = []
 
     # encoder_1: [batch, 256, 256, in_channels] => [batch, 128, 128, ngf]
@@ -336,7 +343,16 @@ def create_generator(args, generator_inputs, generator_outputs_channels):
                 output = tf.div(output + 1., 2., name="output_%d" % output_spec.index)
             else:
                 output = gen_deconv(rectified, output_spec.channels, args["init_stddev"], args["separable_conv"])
-                output = tf.sigmoid(output, name="output_%d" % output_spec.index)
+                if args["metric_loss"] == "bce" or args["metric_loss"] == "ce":
+                    # Save logits when doing classification with entropy losses
+                    output_dict["logits"] = output
+
+                if args["metric_loss"] == "ce":
+                    # Use softmax when using cross entropy
+                    output = tf.softmax(output, name="output_%d" % output_spec.index)
+                else:
+                    output = tf.sigmoid(output, name="output_%d" % output_spec.index)
+                    
             outputs.append(output)
 
         # Combine all outputs along channels
@@ -345,7 +361,9 @@ def create_generator(args, generator_inputs, generator_outputs_channels):
 
         layers.append(output)
 
-    return layers[-1]
+    output_dict["output"] = layers[-1]
+    
+    return output_dict
 
 def create_discriminator(args, discrim_inputs, discrim_targets):
     n_layers = 3
