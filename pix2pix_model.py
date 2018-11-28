@@ -97,8 +97,19 @@ class Pix2PixModel(cambrian.nn.ModelBase):
         gen_loss_GAN = tf.reduce_mean(multiscale_gen_losses_gan)
         discrim_loss = tf.reduce_mean(multiscale_discrim_losses_gan)
         discrim_total_loss = discrim_loss
-        gen_loss_L1 = tf.reduce_mean(tf.abs(self.targets - self.outputs))
-        gen_loss = gen_loss_GAN * self.args["gan_weight"] + gen_loss_L1 * self.args["l1_weight"]
+
+        if self.args["metric_loss"] == "bce":
+            gen_loss_metric = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.targets, logits=self.outputs))
+        elif self.args["metric_loss"] == "ce":
+            gen_loss_metric = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.targets, logits=self.outputs))
+        elif self.args["metric_loss"] == "l1":
+            gen_loss_metric = tf.reduce_mean(tf.abs(self.targets - self.outputs))
+        elif self.args["metric_loss"] == "mse": 
+            gen_loss_metric = 0.5 * tf.reduce_mean(tf.square(self.targets - self.outputs))
+        else:
+            raise Exception("Unknown metric loss %s" % self.args["metric_loss"])
+
+        gen_loss = gen_loss_GAN * self.args["gan_weight"] + gen_loss_metric * self.args["metric_weight"]
         gradient_penalty = None if multiscale_gradient_penalties is None else tf.reduce_mean(multiscale_gradient_penalties) * self.args["gp_weight"]
         if gradient_penalty is not None:
             discrim_total_loss += gradient_penalty
@@ -118,10 +129,10 @@ class Pix2PixModel(cambrian.nn.ModelBase):
 
         # "gen_train" also includes discrim_train through control dependencies
         self._train_op = gen_train
-        self._loss = gen_loss_L1
+        self._loss = gen_loss_metric
         
         # Metrics
-        self.metrics["gen_l1"] = gen_loss_L1
+        self.metrics["gen_metric"] = gen_loss_metric
         self.metrics["gen_gan"] = gen_loss_GAN
         self.metrics["disc_gan"] = discrim_loss
         self.metrics["gen_total"] = gen_loss
@@ -157,7 +168,7 @@ class Pix2PixModel(cambrian.nn.ModelBase):
             summaries.append(tf.summary.scalar("discriminator_loss", discrim_loss))
             summaries.append(tf.summary.scalar("generator_loss_GAN", gen_loss_GAN))
 
-            summaries.append(tf.summary.scalar("generator_loss_L1", gen_loss_L1))
+            summaries.append(tf.summary.scalar("generator_loss_metric", gen_loss_metric))
 
             if self.args["gan_loss"] == "wgan" or self.args["gan_loss"] == "ganqp":
                 summaries.append(tf.summary.scalar("wgan_d_minus_g", discrim_loss - gen_loss_GAN))

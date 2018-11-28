@@ -45,7 +45,8 @@ def pix2pix_config():
 
         "gan_loss": "gan",
         "gp_weight": 0,
-        "l1_weight": 100.0,
+        "metric_weight": 100.0,
+        "metric_loss": "l1",
         "gan_weight": 1.0,
         "num_downsampled_discs": 0,
         
